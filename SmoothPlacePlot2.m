@@ -1,0 +1,514 @@
+function [ratemap,topplot,finalcolormap,noccup2,cellspikes,velcoords] = SmoothPlacePlot2(session,unit,varargin)
+%FUNCTION [ratemap, rawratemap]= cell_SmoothPlacePlot(session, unit, varargin)
+% This function creates a smoothed place plot of cell u.  There are two
+% subplots, on top a trajectory overlaid with spike locations, and on
+% bottom there is a heat plot showing the firing fields.  This can be
+% combined with the 'epoch session' function if there are multiple epochs
+% in the session.
+
+% INPUTS;
+% session is a session struct with a coords or edit_coords field
+% unit is a struct of a cell: has to have a TS field with timestamps
+% varargin is below, these are parameters to play with the plots.  the most
+% salient are gaussdev (the standard deviation of the gaussian kernel) and
+% the factor (the number of pixels per bin)
+% the remaining variables are mostly constraints on data
+%
+% OUTPUTS
+% This function will create a figure, with the handle g
+% ratemap is a grid matrix where each cell is the firing rate at that pixel
+% rawratemap is the ratemap with no smoothing
+
+% notes;
+% this smoothes after spikes are divided, like the hasselmo lab, unlike the
+% mosers lab
+% The gaussian kernel size can be as large as you want
+% There is a variable at line
+% this is also pretty messy, I should fix this in the future
+
+%
+% JHB 9-5-14
+
+p=inputParser;
+addOptional(p,'Gausswin',20);
+addOptional(p,'Gaussdev',1);
+addOptional(p,'Factor',12);
+addOptional(p,'minvelocity',0.1);
+addOptional(p,'mintimespent',.2);  % or about 5 timestamps
+addOptional(p,'minvisits',1);
+addOptional(p,'velsmooth',.2); % in seconds
+addOptional(p,'spikethreshold',50);
+addOptional(p,'clim',[]);
+addOptional(p,'EpochName','Whole Session');
+addOptional(p,'RealLim',1);
+addOptional(p,'Grayout',0);
+addOptional(p,'Timejumpdelay',1);
+addOptional(p,'suppress',0);
+addOptional(p,'onlyheat',0);
+addOptional(p,'realcoords',0);
+addOptional(p,'scalecoorddata',false);
+parse(p,varargin{:});
+
+
+%%%%% these are plotting parameters %%%%%%%
+% fewest spikes the cell has to have to plot
+spikethreshold=p.Results.spikethreshold;
+% size of the gaussian kernel
+Gausswin=p.Results.Gausswin;
+% STD of gaussian kernel
+Gaussdev=p.Results.Gaussdev;
+% this is the pixel size (play with it)
+Factor=p.Results.Factor;
+% if you want to scale the rateplot based on a set firing rate max, e.g.
+% when you are producing paired plots
+clim=p.Results.clim;
+%use max firing rate or max reasonable?
+RealLim=p.Results.RealLim;
+% gray out no spikes?
+grayout=p.Results.Grayout;
+% Name the epoch for the figure
+EpochName=p.Results.EpochName;
+% suppress plot
+suppress=p.Results.suppress;
+% only heat plot
+onlyheat=p.Results.onlyheat;
+% adjust coords to fit video?
+scalecoords=p.Results.scalecoorddata;
+
+
+%%%%% these are cutoff parameters %%%%%%%%
+% velocity cutoff to remove any stationary time
+minvelocity=p.Results.minvelocity;
+% min time spent in each pixel
+mintimespent=p.Results.mintimespent;
+% min visits to the pixel
+minvisits=p.Results.minvisits;
+% time in seconds to smooth the velocity
+velsmooth=p.Results.velsmooth;
+% time delay in seconds that is too long to interpolate
+timejumpdelay=p.Results.Timejumpdelay;
+
+% real coordinates so that you can compare pixels
+realcoords=p.Results.realcoords;
+
+
+
+% output variables;
+ratemap=[];
+rawratemap=[];
+topplot=[];
+finalcolormap=[];
+noccup2=[];
+cellspikes=[];
+velcoords=[];
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% get velocity and make velocity filter
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% if our coords arent the same as the video file
+if scalecoords
+    session.edit_coords(:,2:end)=session.edit_coords(:,2:end)*0.6246;
+end
+
+
+
+dt = diff(session.edit_coords(:,1)); %difference between consecutive coords
+
+tcoord = session.edit_coords((2:end),1); % remove coords so dt1 is for before tcoord1
+tempcoords = session.edit_coords((2:end),2:3);
+
+% not sure why im taking half the dt...
+betweens=tcoord-(dt/2); % now betweens is just before tcoords
+% this is the time window that continuous time data will be assigned that
+% tcoord
+betweens(end+1)=session.edit_coords(end,1);
+
+
+elapsed=diff(betweens);
+% this is if time were continuous, the elapsed is the length of time
+% assigned to that ts
+
+displacement=sqrt(diff(session.edit_coords(:,2)).^2+diff(session.edit_coords(:,3)).^2)*Factor;
+%this is a non smoothed displacement, we may want to bin this to remove the
+%small jitters that occur
+
+
+
+% should be difference for each spike
+% smooth factor for velocity must be odd
+vfactor=round((velsmooth/min(dt))/2)*2-1;
+velocity=smooth(displacement.*dt,vfactor,'moving');
+% there will be some high velocity timestamps because the strobe jumps a
+% bit, generally about 60 jumps between 2 and 10 seconds
+velcoords = (cat(2,tcoord,tempcoords(:,1),tempcoords(:,2),velocity,elapsed));
+%coords now with velocities and latencies
+% cols as follows
+% ts  |  xx   |  yy  |  vel  |   dt
+
+% we can kalman filter velocity if we want
+SpikeTimes=unit.ts;
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%% disregard time jumps%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% if you want this done right you will have to look at a histogram of time
+% jumps, this is easily done by plotting or histogramming diff(timestamps)
+
+% this is in seconds
+
+
+timejumps = [];
+timejumps = cat(1,timejumps,find(diff(tcoord) > timejumpdelay));
+% data isnt interpolated, so we will have to use a timejump window of
+% around 10, not .334 (which is strobe rate)
+binspikes = [];
+session_duration = 0;
+% log session duration and pull spikes that are ONLY within our epochs,
+% epochs, that is, that have ocntinuous tracking (diff is less than 10
+% second
+% this only remove spikes, this doesnt modify any coordinates
+if length(timejumps) >= 1
+    for i = 1:length(timejumps)+1
+        if i == 1 % if its the first epoch
+            % remove ts that will be assigned earlier than ts1 and after
+            % the ts before your pause
+            binspikes = cat(1,binspikes,SpikeTimes(SpikeTimes >= betweens(1) & SpikeTimes <= betweens(timejumps(i))));
+            session_duration = tcoord(timejumps(i))-tcoord(1);
+        elseif  i == length(timejumps)+1 % if its the last epoch
+            % remove the ts that will be assigned to the first ts of the
+            % last epoch
+            binspikes = cat(1,binspikes,SpikeTimes(SpikeTimes >= betweens((timejumps(i-1)+2)) & SpikeTimes <= betweens(end)));
+            session_duration = session_duration+(tcoord(length(tcoord))-(tcoord((timejumps(i-1)+2))));
+        else % middle epochs
+            % reomove spikes that will be assigned to the ts that border
+            % the pause (each will be assigned a large lapsed time
+            binspikes = cat(1,binspikes,SpikeTimes(SpikeTimes >= betweens((timejumps(i-1)+2)) & SpikeTimes <= betweens(timejumps(i))));
+            session_duration = session_duration+(betweens(timejumps(i))-(betweens((timejumps(i-1)+2))));
+        end
+    end
+    newSpikeTimes = binspikes;
+    
+else
+    newSpikeTimes = SpikeTimes(SpikeTimes >= betweens(1) & SpikeTimes <= betweens(end));
+    session_duration =  betweens(length(betweens)) - betweens(1);
+end
+
+% after taking out dead space, what do we have left?
+tossedspikes=length(SpikeTimes)-length(newSpikeTimes);
+if suppress<2
+    fprintf('tossing %d of a total %d spikes \n', tossedspikes, length(unit.ts));
+end
+% just an error check
+if find(diff(SpikeTimes)) == 0 %double check to make sure timestamps aren't duplicated
+    disp 'Error: Repeated Spike Time'
+    
+end
+
+
+if length(SpikeTimes)<spikethreshold
+    % show warnings only if you want
+    if suppress<2
+        fprintf('cell has fewer than %d spikes \n', spikethreshold);
+    end
+    ratemap=[];
+    %g=figure;
+else
+    average_fr=length(SpikeTimes)/session_duration;
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%% now take out timestamps where the dwell time is too long
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+   velcoords = velcoords(velcoords(:,4) >= minvelocity,:);
+
+    
+   
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%% Now plot the spikes and occupancy ts%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    % top plot will be the spikes and occupancy
+    if suppress==0
+        g=figure;
+        if onlyheat==0
+        m=subplot(2,1,1);
+        
+        plot(velcoords(:,2), velcoords(:,3), 'k*');
+        hold on;
+        %rat path for entire session, regardless of velocity
+        
+        plot(cellspikes(:,2), cellspikes(:,3), 'r.');
+        hold off
+        %axis image
+        axis off
+        set(gca, 'Box', 'on')
+        end
+    end
+    
+    
+    topplot.occ(:,1)=velcoords(:,2); topplot.occ(:,2)=velcoords(:,3);
+    
+    %title('Entire Session','fontsize',14,'FontName', 'Arial');
+    
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%% Get resolution for bottom graph
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    % factor is literally pixels per bin
+    if realcoords==1
+         XX=0:(Factor):640;
+         YY=0:(Factor):480;
+    else
+        % here is if youd like to start at 0 for your first coordinate
+        XX=min(velcoords(:,2)):(Factor):max(velcoords(:,2));
+        YY=min(velcoords(:,3)):(Factor):max(velcoords(:,3));
+    end
+    % now resize our coordinates, fit each coordinate into a bin set by our
+    % factor
+    for i=1:length(velcoords)
+        [~,xindices(i)]=min(abs(XX-velcoords(i,2)));
+        [~,yindices(i)]=min(abs(YY-velcoords(i,3)));
+    end
+    
+    % BUT this binning makes errors and turns nans into 1s
+    nanoverx=isnan(velcoords(:,2)); nanovery=isnan(velcoords(:,3));
+    velcoords(:,2)=xindices; velcoords(:,3)=yindices;
+    velcoords(nanoverx,2)=nan; velcoords(nanovery,3)=nan; 
+    
+    
+    
+    
+    %%%%%%%% here you will end with two four column matrices, one for the cell
+    %%%%%%%% and one for the rat.
+    
+    cellspikes = interp1(velcoords(:,1),velcoords(:,2:end),newSpikeTimes,'nearest');
+    cellspikes=[newSpikeTimes cellspikes];
+    
+    
+    % now filter based on minimum occupancy
+    cellspikes = cellspikes(cellspikes(:,4) >minvelocity,:);
+    
+    topplot.spk(:,1)=cellspikes(:,2); topplot.spk(:,2)=cellspikes(:,3);
+    %%%%%%%%%%%%%%%% save top plot data %%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % this is before binning
+    
+    % this is after binning
+    topplot.binocc(:,1)=xindices; topplot.binocc(:,2)=yindices;
+    topplot.binspk(:,1)=cellspikes(:,2); topplot.binspk(:,2)=cellspikes(:,3);
+    
+    
+    %%%%%%%%%%%%% now get bincounts in a matrix %%%%%%%%%%%%%%%%%%%
+    
+    % the accumarray option
+    % now turn it into a grid with occupancy
+    % getting the occupancy in number of times the animal visited the bin
+    
+    %[noccup,c]=hist3(velcoords(:,2:3),'Edges',{XX,YY});
+    % c is just a cell version of XX and YY
+    noccup=accumarray([xindices',yindices'],velcoords(:,5),[length(XX),length(YY)]);
+    % this sums up all the dt times for each coordinate
+    % get noccup to be real time;
+    
+    % noccup=noccup.*dt;
+    
+    newedges={1:length(XX),1:length(YY)};
+    
+    % getting the number of spikes in each bin
+    [nspikes,~]=hist3(cellspikes(:,2:3),'Edges',newedges);
+    
+    
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%% Now filter based on pixels %%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    % calculating visits:
+    I_X=zeros(1,length(velcoords(:,2)));
+    I_Y=I_X;
+    for j=1:length(velcoords(:,2))
+        [~,I_X(j)]=min(abs(velcoords(j,2)-newedges{1}));
+        [~,I_Y(j)]=min(abs(velcoords(j,3)-newedges{2}));
+    end
+    dx=diff([I_X(1)-1,I_X]); %this is to add a value for the first datapoint
+    dy=diff([I_Y(1)-1,I_Y]);
+    % i.e. if the coordinates are the same, its the same visit..
+    % generally you should pad this...
+    % not sure why he doesnt just take abs of each of these...
+    newvisitstimes=-(dy == 0).*(dx==0)+1;
+    
+    
+    [nvisits,~]=hist3([velcoords(newvisitstimes>0,2),velcoords(newvisitstimes>0,3)],'Edges',newedges);
+    
+    
+    % now occupation
+    
+    
+    % now pixels that have really low visits and really high firing rates;
+    highfr=reshape(nspikes,1,numel(nspikes));
+    highfr=highfr(highfr~=0); % to only use pixels with spikes (theres alot of dead space)
+    % these are the pixels where the firing rate was top 5%
+    %[f,x]=ecdf(highfr);
+    %highrate=mean(x(f>.95)); % find the average of all the high pixels
+    
+    % nix pixels that werent occupied
+    badpix=(noccup<mintimespent);
+    goodpix=~badpix;
+    
+    
+    
+    
+    % nix pixels that werent visited enough times
+    Valid=(nvisits>minvisits).*goodpix;
+    % and fills the holes in that box
+    Valid=imfill(Valid);
+    
+    
+    
+    % valid is now what we will use to plot occupancy, and to remove pixels
+    % after the grid is smoothed
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%% now i smooth %%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    % There are two options here, first to convolve separately, which
+    %  is how the mosers did it back in their 05? paper
+    % the other way is to convolve after the fact. which may be more
+    % appropriate because its most likely that outlier pixels for spikerate
+    % will also be outlier pixels for occupancy. I have not found that an
+    % outlier in occupancy has an outlier in rate, but if thats hte case then
+    % convolve separately
+    
+    
+    % we will have to smooth occupancy bur remove bad pixels;
+    nspikes=nspikes.*Valid;
+    noccup=noccup.*Valid;
+    
+    %%%%%% heres the code to smooth before you divide spikes by occupancy
+    
+    %smoothoccup = SmoothMat(noccup, [Gausswin,Gausswin], Gaussdev);
+    
+    % we can smooth all spikes because they all will be valid
+    %smoothspikes = SmoothMat(nspikes, [Gausswin,Gausswin], Gaussdev);
+    
+    
+    % now get ratemap
+    %ratemap=smoothspikes./smoothoccup;
+    
+    ratemap=nspikes./noccup;
+    rawratemap=ratemap.*Valid;
+    rawratemap(isnan(rawratemap))=0;
+    %ratemap(isnan(ratemap))=0; % in case youre not using nanconv, this will
+    %smooth down all edges
+    ratemap=SmoothMat2(ratemap,[Gausswin,Gausswin], Gaussdev);
+    
+    % and fill in where there is no occupancy
+    ratemap=ratemap.*Valid;
+    
+    
+    
+    %i have to transpose all matrices now so their dimensions agree
+    alphadata = (Valid' == 0);
+    ratemap=ratemap';
+    % this is an output so it should agree too
+    noccup2=noccup';
+    
+    
+    
+    % create a white background
+    white = cat(3, ones( size(ratemap)), ones( size(ratemap)), ones( size(ratemap)));
+    gray = white.*.8;
+    floorrate=.01;
+    nospikes=(ratemap<=floorrate);
+    
+    
+    
+    %%%%%%%%%%%%%%%%%%%%%%
+    %%%%%  FIRING RATE LIMITS
+    %%%%%%%%%%%%%%%%%%%%%
+    
+    % find all pixel rates
+    rates=reshape(ratemap,1,numel(ratemap));
+    
+    % parse down to only real rates
+    realrates=rates(~isnan(rates) & ~isinf(rates));
+    
+    % now pad the top 97% of pixels
+    if RealLim
+        if isempty(clim)
+            clim=max(max(realrates));
+        end
+    else
+        if isempty(clim)
+            [f,x]=ecdf(realrates);
+            clim=median(x(f>.97));
+        end
+    end
+    
+    % now any high firing rate is turned to the clim (artificial max)
+    for w=1:numel(ratemap)
+        if ratemap(w)>=clim
+            ratemap(w)=clim;
+        end
+    end
+    
+    %
+    
+    colormap_fr =linspace(0,clim,255);
+    [~,colormap]=histc(ratemap,colormap_fr);
+    rgbcolormap=ind2rgb(colormap,jet(256));
+    
+    if grayout
+        finalcolormap1=immerge(rgbcolormap,gray,nospikes);
+        finalcolormap=immerge(finalcolormap1,white,alphadata);
+    else
+        finalcolormap=immerge(rgbcolormap,white,alphadata);
+    end
+    if suppress==0
+        if onlyheat==0
+            n=subplot(2,1,2,'align');
+        end
+        q=image(finalcolormap);
+        set(gcf,'Colormap',jet(256));
+        axis off
+        set(gca,'YDir','normal')
+        colorbar
+        FRinterval=linspace(0,clim,6);
+        f=colorbar; set(f,'YTickLabel',FRinterval(2:end));
+        
+        %%%%%%%%%%%%%%%%%%%%%%%
+        % now cosmetic stuff%%%
+        %%%%%%%%%%%%%%%%%%%%%%%
+        if onlyheat==0
+        % to get the plots to line up;
+        bottompos=get(n,'Position');
+        figwidth=bottompos(3);
+        toppos=get(m,'Position');
+        toppos(3)=figwidth;
+        set(m,'Position',toppos);
+        % matlab has a broken alphadata function, so we have to immerge our
+        % colormaps.  Maybe in future versions of matlab this wont be a problem
+        %set(q,'AlphaData',noccup');
+        end
+        
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        %%%% add bwboundary to create contiguous place fields%%
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % 
+        %axis off
+        %axis image
+        
+        
+        % this puts white in the background
+        try
+            title({[session.name ' unit ' num2str(unit.units) ' ' EpochName],['mean firing rate = ' num2str(average_fr) 'Hz']} );
+        end
+    end
+end
+end
+
