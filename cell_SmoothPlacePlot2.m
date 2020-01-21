@@ -505,7 +505,54 @@ else
         % 
         %axis off
         %axis image
-        
+        outlinefield=0;
+        if outlinefield
+            max_x = max(max(smoothPlaceField));
+            max_y = max(max(smoothPlaceField));
+            max_fr = max(max_x,max_y);
+            min_fr = min(min(smoothPlaceField));
+            bin_threshold = max(max(smoothPlaceField))*.2;
+            binary_pf = zeros(size(smoothPlaceField));
+            binary_pf(smoothPlaceField > bin_threshold) = 1;
+            [pf_locs, num_pfs] = bwlabel(binary_pf, 4);
+            
+            pf_size = [];
+            for i = 1:num_pfs
+                pf_size(i) = length(find(pf_locs == i));
+            end
+            small_pfs = find(pf_size < 50);
+            
+            for i = 1:length(small_pfs)
+                pf_locs(find(pf_locs == small_pfs(i))) = 0;
+            end
+            
+            [B,L] = bwboundaries(pf_locs,'noholes');
+            
+            
+            
+            %%%%%%%%%%%%%%%%Smoothed PlaceField%%%%%%%%%%%%%%%%
+            gridx  = 2;
+            gridy  = 1;
+            leftside = leftmargin + ((gridx-1)*subplotwidth) + (gridx-1)*(.1/fig_cols);
+            plot_ax(u,2) = subplot('Position', [leftside plot_bottom subplotwidth plot_height]);
+            black = cat(3, zeros( size(smoothPlaceField)), zeros( size(smoothPlaceField)), zeros( size(smoothPlaceField)));
+            alphadata = (Valid == 0);
+            color_interval = max(max(smoothPlaceField))/99;
+            colormap_fr = 0:color_interval:max(max(smoothPlaceField));
+            [n_elements,colormap_smoothPlaceField] = histc(smoothPlaceField,colormap_fr);
+            rgbsmoothPlaceField = ind2rgb(colormap_smoothPlaceField, jet(100));
+            mergedsmoothPlaceField =immerge(rgbsmoothPlaceField, black, alphadata);
+            imagesc(mergedsmoothPlaceField)
+            axis image
+            colorbar
+            fig_max_fr = round(max_fr/0.1)*0.1;
+            colorbar('YTickLabel',{'0',' ', ' ', ' ', ' ',  fig_max_fr});
+            hold on;
+            for k = 1:length(B)
+                boundary = B{k};
+                plot(boundary(:,2), boundary(:,1), 'w', 'LineWidth', 2)
+            end
+        end
         
         % this puts white in the background
         title({[session.name ' unit ' num2str(unit.units) ' ' EpochName],['mean firing rate = ' num2str(average_fr) 'Hz']} );

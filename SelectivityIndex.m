@@ -1,7 +1,7 @@
 function [score,pval] = SelectivityIndex(rates,design,numboots)
 % Score = SelectivityIndex(rates,design)
 % maximum selectivity index for a level to a variable over all others
-% basically argmax a(i)-a(~i) / a(i)+a(~i)
+% basically ARGMAX i->n ( abs (a(i)-a(~i)) / (a(i)+a(~i)) )
 design=design(:); rates=rates(:); pval=nan; score=nan;
 if ~exist('numboots','var')
     numboots=0;
@@ -19,8 +19,17 @@ if numboots>0
        bootdesign{boot}=design(shuffled(boot,:));
        bootscore(boot)=SIquick(bootdesign{boot},rates);
     end
-    % now the pval is just how many boots beat the real score
-    pval=nanmean(bootscore>score);
+    % now the pval is just how many boots beat or tie the real score
+    %pval=nanmean(bootscore>=score);
+    % other way is to get a normpdf (all vals are abs already)
+    if nanstd(bootscore)>0
+        pval = 1-normcdf( score, nanmean(bootscore), nanstd(bootscore));
+    else
+        pval=nan;
+    end
+    if pval<.05
+        fprintf('got one \n');
+    end
 end
 end
 
@@ -29,9 +38,12 @@ function score=SIquick(design,rates)
        scores=nan(length(uniques),1);
        % run for each level of that factor
        for i=1:length(scores)
+           % absolute val of difference
            numer=abs(nanmean(rates(ia==i))-nanmean(rates(ia~=i)));
+           % sum
            denomer=nanmean(rates(ia==i))+nanmean(rates(ia~=i));
-           scores(i)=numer/denomer;
+           % absolute difference over the sum
+           scores(i)=numer/denomer; 
        end
        % get argmax of those scores
        score=max(scores);

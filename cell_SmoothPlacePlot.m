@@ -33,15 +33,15 @@ function [ratemap,topplot,finalcolormap,noccup2,cellspikes,velcoords,nspikes,noc
 p=inputParser;
 addOptional(p,'Gausswin',40); % huge cause it drops off real quick
 addOptional(p,'Gaussdev',1);
-addOptional(p,'Factor',6); % meaning centimeters per pixel
-addOptional(p,'minvelocity',0.4); % in cm per second
+addOptional(p,'Factor',6); % meaning pixels per bin
+addOptional(p,'minvelocity',0.2); % in cm per second
 addOptional(p,'mintimespent',.05);  % or about 5 timestamps
 addOptional(p,'minvisits',2);
 addOptional(p,'velsmooth',.5); % in seconds
-addOptional(p,'spikethreshold',50);
+addOptional(p,'spikethreshold',30);
 addOptional(p,'clim',[]);
 addOptional(p,'EpochName','Whole Session');
-addOptional(p,'RealLim',1);
+addOptional(p,'RealLim',0);
 addOptional(p,'Grayout',0);
 addOptional(p,'Timejumpdelay',1);
 addOptional(p,'suppress',0);
@@ -142,7 +142,7 @@ velcoords = (cat(2,tcoord,tempcoords(:,1),tempcoords(:,2),velocity,dt));
 % ts  |  xx   |  yy  |  vel  |   dt
 
 % we can kalman filter velocity if we want
-SpikeTimes=unit.ts(:);
+SpikeTimes=unit.ts(:,1);
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -209,8 +209,8 @@ end
 if length(cellspikes)<spikethreshold
     % show warnings only if you want
     if suppress<2
-        fprintf('cell %s has fewer than %d spikes \n', unit.name, spikethreshold);
-        
+        %fprintf('cell %s has fewer than %d spikes \n', unit.name, spikethreshold);
+        fprintf('cell has fewer than %d spikes \n', spikethreshold);
     end
     topplot.occ=[0 0];
     topplot.spk=[0 0];
@@ -222,35 +222,23 @@ else                        % if we have enough spikes lets roll
     
     %%%%%%%%%%%% Find pixels for each spike and scrub for long delays
     
-    average_fr=length(newSpikeTimes)/session_duration;
-    
-    
-    
     % cell spikes is as follows:
     % ts | x coord | y coord | velocity | dt
-    
     cellspikes = interp1(velcoords(:,1),velcoords(:,1:end),newSpikeTimes,'nearest');
-    
     cellspikes = cellspikes(cellspikes(:,4) > minvelocity,:);
-    
-    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%% Now plot the spikes and occupancy ts %
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % take out when the velocity is actually zero from both occupancy and
     % spikes
     velcoords(velcoords(:,4)<.25*minvelocity,:)=[];
-    
-    
-    
-    
     % top plot will be the spikes and occupancy
     if suppress==0
         g=figure;
         if onlyheat==0
             m=subplot(2,1,1);
             
-            plot(velcoords(:,2), velcoords(:,3), 'k*');
+            plot(velcoords(:,2), velcoords(:,3), 'k-');
             hold on;
             %rat path for entire session, regardless of velocity
             
@@ -505,9 +493,10 @@ else                        % if we have enough spikes lets roll
         set(gcf,'Colormap',jet(256));
         axis off
         set(gca,'YDir','normal')
-        colorbar
+        %colorbar
         FRinterval=linspace(0,clim,6);
-        f=colorbar; set(f,'YTickLabel',FRinterval(2:end));
+        %f=colorbar; set(f,'YTickLabel',FRinterval(2:end));
+        title(sprintf('max %.2f',clim));
         
         %%%%%%%%%%%%%%%%%%%%%%%
         % now cosmetic stuff%%%
@@ -532,10 +521,7 @@ else                        % if we have enough spikes lets roll
         %axis off
         %axis image
         
-        pixelsize=100/length(finalcolormap);
-        % this puts white in the background
-        title({[session.name ' unit ' num2str(unit.name) ' ' EpochName],...
-            ['mean rate = ' num2str(average_fr) 'Hz' num2str(pixelsize) 'cm/px']} );
+
     end
 end
 end

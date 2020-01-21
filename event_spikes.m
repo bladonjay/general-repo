@@ -31,9 +31,9 @@ numevents = length(event);
 numfoundspikes = 0; % total number of spikes
 spikes=[]; % vector of raw ts for each event
 spksevs=[]; % vector of the # of spikes found for every event
-foundindices=[]; % cell mat of the indices per event
-foundspikes=[]; % cell mat of the raw spike ts per event
-foundevspikes=[]; % cell mat of found spikes locked to event
+foundindices={[]}; % cell mat of the indices per event
+foundspikes={[]}; % cell mat of the raw spike ts per event
+foundevspikes={[]}; % cell mat of found spikes locked to event
 evspikes=[]; % vector of all the spikes locked to eventstarts
 
 if length(secbefore)==1, secbefore=repmat(secbefore,length(event),1); end
@@ -41,24 +41,18 @@ if length(secafter)==1, secafter=repmat(secafter,length(event),1); end
 if any(parallel)
     parfor ev = 1:numevents
         % find spikes and indices that are
-        foundindices{ev} = find( (allspikes(:) > event(ev)-secbefore(ev)) & (allspikes(:) < event(ev)+secafter(ev)) );
-        foundspikes{ev} =allspikes( (allspikes(:) > event(ev)-secbefore(ev)) & (allspikes(:) < event(ev)+secafter(ev)) );
+        foundindices{ev} = find( (allspikes(:) > event(ev)-secbefore(ev)) & (allspikes(:) < event(ev)+secafter(ev)));
+        foundspikes{ev} =allspikes( (allspikes(:) > event(ev)-secbefore(ev)) & (allspikes(:) < event(ev)+secafter(ev)));
         foundevspikes{ev}=foundspikes{ev}-event(ev); % lock to the trial start
+        % take the number of spikes over your duration
         spksevs(ev)=length(foundindices{ev})/(secafter(ev)+secbefore(ev));
-
     end
 else
     for ev = 1:numevents
         % find spikes and indices that are
-        foundindices{ev} = find( (allspikes(:) > event(ev)-secbefore(ev)) & (allspikes(:) < event(ev)+secafter(ev)) );
-        foundspikes{ev} =allspikes( (allspikes(:) > event(ev)-secbefore(ev)) & (allspikes(:) < event(ev)+secafter(ev)) );
-        foundevspikes{ev}=foundspikes{ev}-event(ev);
-        %     if ~isempty(foundindices{ev})
-        %         %
-        %         spikes = [spikes;foundspikes{ev}];
-        % 		evspikes = [evspikes;foundspikes{ev}-event(ev)];
-        % 		numfoundspikes = numfoundspikes + length(foundindices{ev});
-        %     end
+        foundindices{ev} = find( (allspikes(:) > event(ev)-secbefore(ev)) & (allspikes(:) < event(ev)+secafter(ev)));
+        foundspikes{ev} =allspikes( (allspikes(:) > event(ev)-secbefore(ev)) & (allspikes(:) < event(ev)+secafter(ev)));
+        foundevspikes{ev}=foundspikes{ev}-event(ev); % lock to the trial start
         % take the number of spikes over your duration
         spksevs(ev)=length(foundindices{ev})/(secafter(ev)+secbefore(ev));
     end %end of for loop

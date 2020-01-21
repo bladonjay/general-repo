@@ -35,9 +35,7 @@ cut_pool=minshift: .1 :finish-start-minshift;
 %if length(spiketimes3)>2
     
     % now pull random timestamp from numbergenerator
-    [cutposition]=datasample(cut_pool,1);
-    
-
+    cutposition=datasample(cut_pool,1);
     
     % now circular shift those numbers
     
@@ -45,8 +43,9 @@ cut_pool=minshift: .1 :finish-start-minshift;
     % newstart to these data
     firsthalf=spiketimes3(spiketimes3<cutposition);
     
-    % add the end chunk on front
-    newsecondhalf=firsthalf+(finish-cutposition);
+    % add the end chunk on front (the length of time thats the second
+    % chunk)
+    newsecondhalf=firsthalf+(finish-start)-cutposition;
     
     % all numbers above our point start from 0 (secondhalf first ind will be 0)
     secondhalf=spiketimes3(spiketimes3>=cutposition);

@@ -44,7 +44,7 @@ function boxScatterplot(x,grps,varargin)
     p.addRequired('grps',@(x) isnumeric(x));
     % will forgot to match the labels with the number of groups... asshole
 
-    %p.addParameter('xLabels',{'Group 1','Group 2'},@(x) iscell(x));
+    p.addParameter('xLabels',{'Group 1','Group 2'},@(x) iscell(x));
     p.addParameter('yLabel','Metric',@(x) ischar(x)); 
     p.addParameter('boxColor','k',@(x) ischar(x) || isnumeric(x));
     p.addParameter('circleSize',20,@(x) isnumeric(x)); 
@@ -55,7 +55,7 @@ function boxScatterplot(x,grps,varargin)
     p.addParameter('plotBox',true,@(x) islogical(x));
     
     p.parse(x,grps,varargin{:});
-    %xLabels = p.Results.xLabels; 
+    xLabels = p.Results.xLabels; 
     yLabel = p.Results.yLabel; 
     boxColor = p.Results.boxColor;
     circleSize = p.Results.circleSize;
@@ -65,8 +65,13 @@ function boxScatterplot(x,grps,varargin)
     position = p.Results.position;
     plotBox = p.Results.plotBox;
     
+    % fix xlabels
     
-    
+    if length(unique(grps))>length(xLabels)
+        for i=1:length(unique(grps))
+            xLabels{i}=sprintf('group %d',i);
+        end
+    end
     
     % put values and groups into a design matrix
     try
@@ -97,7 +102,7 @@ function boxScatterplot(x,grps,varargin)
     end
     
     %Figure here. 
-    if isnumeric(position)
+    if length(position)==4
         figure('Position',position); 
     end
     hold on;
@@ -113,7 +118,8 @@ function boxScatterplot(x,grps,varargin)
     alpha(scat,transparency);
     
     ylabel(yLabel);
-    set(gca,'tickdir','out');
+    set(gca,'tickdir','out','XTickLabels',xLabels);
+   
     
     
 end
