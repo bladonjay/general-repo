@@ -34,7 +34,7 @@ p=inputParser;
 addOptional(p,'Gausswin',40); % huge cause it drops off real quick
 addOptional(p,'Gaussdev',1);
 addOptional(p,'Factor',6); % meaning pixels per bin
-addOptional(p,'minvelocity',0.2); % in cm per second
+addOptional(p,'minvelocity',20); % in pixels per second
 addOptional(p,'mintimespent',.05);  % or about 5 timestamps
 addOptional(p,'minvisits',2);
 addOptional(p,'velsmooth',.5); % in seconds
@@ -122,7 +122,7 @@ dt = diff(session.edit_coords(:,1));
 % assigned to that ts
 
 
-displacement=sqrt(diff(session.edit_coords(:,2)).^2+diff(session.edit_coords(:,3)).^2);
+displacement=sqrt(diff(session.edit_coords(:,2)).^2+diff(session.edit_coords(:,3)).^2)/median(dt);
 % remove if youre only moving one or two pixels over
 %this is a non smoothed displacement, we may want to bin this to remove the
 %small jitters that occur, lets use a moving average
@@ -132,10 +132,10 @@ displacement=sqrt(diff(session.edit_coords(:,2)).^2+diff(session.edit_coords(:,3
 % zero and get a decent spread of velocities * function discretize*
 % smooth factor for velocity must be odd
 vfactor=round((velsmooth/median(dt))/2)*2-1;
-rawvelocity=smooth(displacement,vfactor,'moving');
+rawvelocity=smooth(displacement,vfactor,'moving'); % mnaybe a gaussian window
 velocity=(rawvelocity.*dt)* 30; % in pixels per second
 % there will be some high velocity timestamps because the strobe jumps a
-% bit, generally about 60 jumps between 2 and 10 seconds
+% bit, generally about 60 jumps between 2 and 10 se conds
 velcoords = (cat(2,tcoord,tempcoords(:,1),tempcoords(:,2),velocity,dt));
 %coords now with velocities and latencies
 % cols as follows
@@ -206,6 +206,10 @@ if find(diff(SpikeTimes)) == 0 %double check to make sure timestamps aren't dupl
     disp 'Error: Repeated Spike Time'
 end
 
+
+
+
+% run the spikes, but only if the cell has enough spikes
 if length(cellspikes)<spikethreshold
     % show warnings only if you want
     if suppress<2
@@ -218,7 +222,9 @@ if length(cellspikes)<spikethreshold
     ratemap=[];
     %g=figure;
     return
-else                        % if we have enough spikes lets roll
+else
+    
+    % if we have enough spikes lets roll
     
     %%%%%%%%%%%% Find pixels for each spike and scrub for long delays
     
@@ -226,12 +232,14 @@ else                        % if we have enough spikes lets roll
     % ts | x coord | y coord | velocity | dt
     cellspikes = interp1(velcoords(:,1),velcoords(:,1:end),newSpikeTimes,'nearest');
     cellspikes = cellspikes(cellspikes(:,4) > minvelocity,:);
+    
+    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%% Now plot the spikes and occupancy ts %
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % take out when the velocity is actually zero from both occupancy and
     % spikes
-    velcoords(velcoords(:,4)<.25*minvelocity,:)=[];
+    velcoords=velcoords(velcoords(:,4)>minvelocity,:);
     % top plot will be the spikes and occupancy
     if suppress==0
         g=figure;
