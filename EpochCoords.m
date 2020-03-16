@@ -5,10 +5,7 @@ function [newcoords,segments] = EpochCoords(oldcoords,events)
 
 % JHB
 
-% resize just in case
-if size(oldcoords,1)<size(oldcoords,2)
-    oldcoords=oldcoords';
-end
+
 
 % make sure we have two columns
 if size(events,2)~=2

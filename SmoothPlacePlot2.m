@@ -1,4 +1,4 @@
-function [ratemap,topplot,finalcolormap,noccup2,cellspikes,velcoords] = SmoothPlacePlot2(session,unit,varargin)
+function [ratemap,topplot,finalcolormap,noccup2,cellspikes,velcoords] = SmoothPlacePlot2(coorddata,unit,varargin)
 %FUNCTION [ratemap, rawratemap]= cell_SmoothPlacePlot(session, unit, varargin)
 % This function creates a smoothed place plot of cell u.  There are two
 % subplots, on top a trajectory overlaid with spike locations, and on
@@ -28,69 +28,55 @@ function [ratemap,topplot,finalcolormap,noccup2,cellspikes,velcoords] = SmoothPl
 
 %
 % JHB 9-5-14
+% JHB 3-9-20
 
 p=inputParser;
-addOptional(p,'Gausswin',20);
-addOptional(p,'Gaussdev',1);
-addOptional(p,'Factor',12);
-addOptional(p,'minvelocity',0.1);
+addOptional(p,'Gausswin',20); % in pixels of final map
+addOptional(p,'Gaussdev',1); % in pixels of final map
+addOptional(p,'PixPerCM',6); % pixels per bin
+addOptional(p,'CMPerBin',2); % bin as in pixel for rate map
+addOptional(p,'minvelocity',5); % cm/sec
 addOptional(p,'mintimespent',.2);  % or about 5 timestamps
-addOptional(p,'minvisits',1);
+addOptional(p,'minvisits',2); % visits to that bin
 addOptional(p,'velsmooth',.2); % in seconds
-addOptional(p,'spikethreshold',50);
-addOptional(p,'clim',[]);
+addOptional(p,'spikethreshold',50); % nspikes you have to have to do the expt
+addOptional(p,'clim',[]); 
 addOptional(p,'EpochName','Whole Session');
-addOptional(p,'RealLim',1);
+addOptional(p,'RealLim',1); 
 addOptional(p,'Grayout',0);
-addOptional(p,'Timejumpdelay',1);
+addOptional(p,'Timejumpdelay',.3); % how many seconds is the max to comb over
 addOptional(p,'suppress',0);
 addOptional(p,'onlyheat',0);
 addOptional(p,'realcoords',0);
 addOptional(p,'scalecoorddata',false);
+addOptional(p,'VelocityData',[]);
 parse(p,varargin{:});
 
+% if we already have smoothed velocity data
+VelData=p.Results.VelocityData;
 
 %%%%% these are plotting parameters %%%%%%%
-% fewest spikes the cell has to have to plot
-spikethreshold=p.Results.spikethreshold;
-% size of the gaussian kernel
-Gausswin=p.Results.Gausswin;
-% STD of gaussian kernel
-Gaussdev=p.Results.Gaussdev;
-% this is the pixel size (play with it)
-Factor=p.Results.Factor;
-% if you want to scale the rateplot based on a set firing rate max, e.g.
-% when you are producing paired plots
-clim=p.Results.clim;
-%use max firing rate or max reasonable?
-RealLim=p.Results.RealLim;
-% gray out no spikes?
-grayout=p.Results.Grayout;
-% Name the epoch for the figure
-EpochName=p.Results.EpochName;
-% suppress plot
-suppress=p.Results.suppress;
-% only heat plot
-onlyheat=p.Results.onlyheat;
-% adjust coords to fit video?
-scalecoords=p.Results.scalecoorddata;
+spikethreshold=p.Results.spikethreshold; % fewest spikes the cell has to have to plot
+Gausswin=p.Results.Gausswin; % size of the gaussian kernel
+Gaussdev=p.Results.Gaussdev; % STD of gaussian kernel
+PixPerCM=p.Results.PixPerCM; % How many raw pixels per cm
+CMPerBin=p.Results.CMPerBin; % how many cm per bin for final colormap?
+clim=p.Results.clim; % if you want to scale the rateplot based on a set firing rate max, e.g.
+RealLim=p.Results.RealLim; % use max firing rate or max reasonable?
+grayout=p.Results.Grayout; % gray out no spikes?
+EpochName=p.Results.EpochName; % Name the epoch for the figure
+suppress=p.Results.suppress; % suppress plot
+onlyheat=p.Results.onlyheat; % only heat plot
+scalecoords=p.Results.scalecoorddata; % adjust coords to fit video?
 
 
 %%%%% these are cutoff parameters %%%%%%%%
-% velocity cutoff to remove any stationary time
-minvelocity=p.Results.minvelocity;
-% min time spent in each pixel
-mintimespent=p.Results.mintimespent;
-% min visits to the pixel
-minvisits=p.Results.minvisits;
-% time in seconds to smooth the velocity
-velsmooth=p.Results.velsmooth;
-% time delay in seconds that is too long to interpolate
-timejumpdelay=p.Results.Timejumpdelay;
-
-% real coordinates so that you can compare pixels
-realcoords=p.Results.realcoords;
-
+minvelocity=p.Results.minvelocity; % velocity cutoff to remove any stationary time
+mintimespent=p.Results.mintimespent; % min time spent in each pixel
+minvisits=p.Results.minvisits; % min visits to the pixel
+velsmooth=p.Results.velsmooth; % time in seconds to smooth the velocity
+timejumpdelay=p.Results.Timejumpdelay; % time delay in seconds that is too long to interpolate
+realcoords=p.Results.realcoords; % real coordinates so that you can compare pixels across maps
 
 
 % output variables;
@@ -101,66 +87,104 @@ finalcolormap=[];
 noccup2=[];
 cellspikes=[];
 velcoords=[];
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%% make sure ts always goes up and no repeats
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+[~,uniquets]=unique(coorddata(:,1));
+coorddata=coorddata(uniquets,:);
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % get velocity and make velocity filter
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % if our coords arent the same as the video file
 if scalecoords
-    session.edit_coords(:,2:end)=session.edit_coords(:,2:end)*0.6246;
+    coorddata(:,2:end)=coorddata(:,2:end)*0.6246;
+end
+
+dt = diff(coorddata(:,1)); % difference between consecutive coords
+% chop off the first timestamp because we dont know its elapsed time
+timestamps = coorddata((2:end),1); % remove coords so dt1 is for before tcoord1
+xycoords = coorddata((2:end),2:3); % save raw xy data (because we smooth for velocity filtering)
+
+%{
+% cut each elapsed time in half and assign it to each coordinate value.
+% that way each coordinate value gets half of the time before it and half
+% of the time after it
+betweens=timestamps-(dt/2); % not sure i want to do this...
+betweens(end+1)=coorddata(end,1);
+elapsed=diff(betweens);
+%}
+elapsed=dt;
+elapsed(elapsed>timejumpdelay)=nan;
+
+if isempty(VelData)
+% this is the smoothing algorithm to get the velocity data
+windowspan=round(velsmooth/median(dt))*5; % how many seconds to smooth the data across?
+coorddata2=[SmoothMat2(coorddata(:,2),[1 windowspan*4], windowspan),...
+    SmoothMat2(coorddata(:,3),[1 windowspan*4], windowspan)];
+
+
+% this is in cm
+displacement=sqrt(diff(coorddata2(:,1)).^2+diff(coorddata2(:,2)).^2)/PixPerCM;
+%this is a non smoothed displacement, we may want to bin this to remove the
+%small jitters that occur
+% any displacement where the time is too far, we have to nan out
+
+% nan out long lags so they dont contribute to the smoothed average
+displacement(elapsed>timejumpdelay)=nan; 
+% for smoothing the velocity data, we grab all the coords that are within
+% our timewindow average them and thats our smoothed velocity.
+velocity=nan(length(displacement),1);
+
+% this takes fucking forever, so lets just do a 5 bin arma
+parfor i=1:length(velocity)
+    velocity(i)=nansum(displacement(abs(timestamps-timestamps(i))<=velsmooth))/...
+        nansum(elapsed(abs(timestamps-timestamps(i))<=velsmooth));
+end
+
+%velocity=smooth(displacement./dt,vfactor,'moving');
+% there will be some high velocity timestamps because the strobe jumps a
+% bit, generally about 60 jumps between 2 and 10 seconds
+else
+    velocity=VelData;
 end
 
 
 
-dt = diff(session.edit_coords(:,1)); %difference between consecutive coords
-
-tcoord = session.edit_coords((2:end),1); % remove coords so dt1 is for before tcoord1
-tempcoords = session.edit_coords((2:end),2:3);
-
-% not sure why im taking half the dt...
-betweens=tcoord-(dt/2); % now betweens is just before tcoords
-% this is the time window that continuous time data will be assigned that
-% tcoord
-betweens(end+1)=session.edit_coords(end,1);
+velcoords = (cat(2,timestamps,xycoords,velocity,elapsed));
 
 
-elapsed=diff(betweens);
-% this is if time were continuous, the elapsed is the length of time
-% assigned to that ts
-
-displacement=sqrt(diff(session.edit_coords(:,2)).^2+diff(session.edit_coords(:,3)).^2)*Factor;
-%this is a non smoothed displacement, we may want to bin this to remove the
-%small jitters that occur
-
-
-
-% should be difference for each spike
-% smooth factor for velocity must be odd
-vfactor=round((velsmooth/min(dt))/2)*2-1;
-velocity=smooth(displacement.*dt,vfactor,'moving');
-% there will be some high velocity timestamps because the strobe jumps a
-% bit, generally about 60 jumps between 2 and 10 seconds
-velcoords = (cat(2,tcoord,tempcoords(:,1),tempcoords(:,2),velocity,elapsed));
 %coords now with velocities and latencies
 % cols as follows
 % ts  |  xx   |  yy  |  vel  |   dt
 
-% we can kalman filter velocity if we want
-SpikeTimes=unit.ts;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% now threshold based on velocity
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+velcoords = velcoords(velcoords(:,4) >= minvelocity,:);
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% disregard time jumps%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% if you want this done right you will have to look at a histogram of time
-% jumps, this is easily done by plotting or histogramming diff(timestamps)
-
+% no we we have a ton of snippits of fast moving data.  We want to make
+% sure that we dont take spikes that are outside of those data, and we want
+% to make sure we dont count elapsed time outside of those data
+% we also dont want to use high velocity epochs that are super quick,
+% because thoes may be just head pans
 % this is in seconds
-
+SpikeTimes=unit.ts(:,1);
 
 timejumps = [];
-timejumps = cat(1,timejumps,find(diff(tcoord) > timejumpdelay));
+timejumps = cat(1,timejumps,find(diff(velcoords(:,1)) > timejumpdelay));
 % data isnt interpolated, so we will have to use a timejump window of
 % around 10, not .334 (which is strobe rate)
 binspikes = [];
@@ -169,30 +193,30 @@ session_duration = 0;
 % epochs, that is, that have ocntinuous tracking (diff is less than 10
 % second
 % this only remove spikes, this doesnt modify any coordinates
-if length(timejumps) >= 1
+if length(timejumps) > 0
     for i = 1:length(timejumps)+1
         if i == 1 % if its the first epoch
             % remove ts that will be assigned earlier than ts1 and after
             % the ts before your pause
-            binspikes = cat(1,binspikes,SpikeTimes(SpikeTimes >= betweens(1) & SpikeTimes <= betweens(timejumps(i))));
-            session_duration = tcoord(timejumps(i))-tcoord(1);
+            binspikes = cat(1,binspikes,SpikeTimes(SpikeTimes >= velcoords(1) & SpikeTimes <=velcoords(timejumps(i),1)));
+            session_duration = timestamps(timejumps(i))-timestamps(1);
         elseif  i == length(timejumps)+1 % if its the last epoch
             % remove the ts that will be assigned to the first ts of the
             % last epoch
-            binspikes = cat(1,binspikes,SpikeTimes(SpikeTimes >= betweens((timejumps(i-1)+2)) & SpikeTimes <= betweens(end)));
-            session_duration = session_duration+(tcoord(length(tcoord))-(tcoord((timejumps(i-1)+2))));
+            binspikes = cat(1,binspikes,SpikeTimes(SpikeTimes >= velcoords((timejumps(i-1)+2),1) & SpikeTimes <= velcoords(end,1)));
+            session_duration = session_duration+(timestamps(length(timestamps))-(timestamps((timejumps(i-1)+2))));
         else % middle epochs
             % reomove spikes that will be assigned to the ts that border
             % the pause (each will be assigned a large lapsed time
-            binspikes = cat(1,binspikes,SpikeTimes(SpikeTimes >= betweens((timejumps(i-1)+2)) & SpikeTimes <= betweens(timejumps(i))));
-            session_duration = session_duration+(betweens(timejumps(i))-(betweens((timejumps(i-1)+2))));
+            binspikes = cat(1,binspikes,SpikeTimes(SpikeTimes >= velcoords((timejumps(i-1)+2),1) & SpikeTimes <= velcoords(timejumps(i),1)));
+            session_duration = session_duration+velcoords(timejumps(i),1)-velcoords((timejumps(i-1)+2),1);
         end
     end
     newSpikeTimes = binspikes;
     
 else
-    newSpikeTimes = SpikeTimes(SpikeTimes >= betweens(1) & SpikeTimes <= betweens(end));
-    session_duration =  betweens(length(betweens)) - betweens(1);
+    newSpikeTimes = SpikeTimes(SpikeTimes >= velcoords(1) & SpikeTimes <= velcoords(end,1));
+    session_duration =  velcoords(end,1)-velcoords(1);
 end
 
 % after taking out dead space, what do we have left?
@@ -201,13 +225,13 @@ if suppress<2
     fprintf('tossing %d of a total %d spikes \n', tossedspikes, length(unit.ts));
 end
 % just an error check
-if find(diff(SpikeTimes)) == 0 %double check to make sure timestamps aren't duplicated
+if find(diff(sort(SpikeTimes))) == 0 %double check to make sure timestamps aren't duplicated
     disp 'Error: Repeated Spike Time'
     
 end
 
 
-if length(SpikeTimes)<spikethreshold
+if length(newSpikeTimes)<spikethreshold
     % show warnings only if you want
     if suppress<2
         fprintf('cell has fewer than %d spikes \n', spikethreshold);
@@ -215,20 +239,25 @@ if length(SpikeTimes)<spikethreshold
     ratemap=[];
     %g=figure;
 else
-    average_fr=length(SpikeTimes)/session_duration;
+    average_fr=length(newSpikeTimes)/session_duration;
 
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%% now take out timestamps where the dwell time is too long
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-   velcoords = velcoords(velcoords(:,4) >= minvelocity,:);
 
     
-   
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%% Now plot the spikes and trajectory ts%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    % now we've ditched any spikes outside of 0.3 seconds from the closest
+    % video timestamp
+    % cellspikes are now ts, x, y, vel, elapsed time
+    cellspikes = [newSpikeTimes interp1(velcoords(:,1),velcoords(:,2:end),newSpikeTimes,'nearest')];
     
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%% Now plot the spikes and occupancy ts%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    topplot.spk=cellspikes(:,2:3);
+    topplot.occup=velcoords(:,2:3);
+    %%%%%%%%%%%%%%%% save top plot data %%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % this is before binning
+    
+    
     
     % top plot will be the spikes and occupancy
     if suppress==0
@@ -258,14 +287,15 @@ else
     %%% Get resolution for bottom graph
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    % factor is literally pixels per bin
+    % realcoords is if you have a 480 to 640 frame size (usually its
+    % higher)
     if realcoords==1
-         XX=0:(Factor):640;
-         YY=0:(Factor):480;
+         XX=0:(PixPerCM*CMPerBin):1600; % probably need to make this bigger
+         YY=0:(PixPerCM*CMPerBin):1600;
     else
-        % here is if youd like to start at 0 for your first coordinate
-        XX=min(velcoords(:,2)):(Factor):max(velcoords(:,2));
-        YY=min(velcoords(:,3)):(Factor):max(velcoords(:,3));
+        % this is if you dont knoiw your whole window size
+        XX=min(velcoords(:,2)):PixPerCM*CMPerBin:max(velcoords(:,2));
+        YY=min(velcoords(:,3)):(PixPerCM*CMPerBin):max(velcoords(:,3));
     end
     % now resize our coordinates, fit each coordinate into a bin set by our
     % factor
@@ -274,57 +304,31 @@ else
         [~,yindices(i)]=min(abs(YY-velcoords(i,3)));
     end
     
-    % BUT this binning makes errors and turns nans into 1s
+    % Sometimes nan coordinates carry throguh and you need to delete these
     nanoverx=isnan(velcoords(:,2)); nanovery=isnan(velcoords(:,3));
     velcoords(:,2)=xindices; velcoords(:,3)=yindices;
     velcoords(nanoverx,2)=nan; velcoords(nanovery,3)=nan; 
+    % now velcoords are in place map bins
     
-    
-    
-    
-    %%%%%%%% here you will end with two four column matrices, one for the cell
-    %%%%%%%% and one for the rat.
-    
-    cellspikes = interp1(velcoords(:,1),velcoords(:,2:end),newSpikeTimes,'nearest');
-    cellspikes=[newSpikeTimes cellspikes];
-    
-    
-    % now filter based on minimum occupancy
-    cellspikes = cellspikes(cellspikes(:,4) >minvelocity,:);
-    
-    topplot.spk(:,1)=cellspikes(:,2); topplot.spk(:,2)=cellspikes(:,3);
-    %%%%%%%%%%%%%%%% save top plot data %%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % this is before binning
-    
-    % this is after binning
-    topplot.binocc(:,1)=xindices; topplot.binocc(:,2)=yindices;
-    topplot.binspk(:,1)=cellspikes(:,2); topplot.binspk(:,2)=cellspikes(:,3);
-    
-    
-    %%%%%%%%%%%%% now get bincounts in a matrix %%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%% Accumulate bin counts occup/spk %%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     % the accumarray option
-    % now turn it into a grid with occupancy
-    % getting the occupancy in number of times the animal visited the bin
-    
-    %[noccup,c]=hist3(velcoords(:,2:3),'Edges',{XX,YY});
-    % c is just a cell version of XX and YY
+    % accumarray across all bins because you want to account for zero visit
+    % bins, this accumulates 5th column which is elapsed time (dt)
     noccup=accumarray([xindices',yindices'],velcoords(:,5),[length(XX),length(YY)]);
-    % this sums up all the dt times for each coordinate
-    % get noccup to be real time;
-    
-    % noccup=noccup.*dt;
-    
+
+    % cast the spikes into the same timestamps but update the coordinates
+
+    cellspikes = [newSpikeTimes interp1(velcoords(:,1),velcoords(:,2:end),newSpikeTimes,'nearest')];
+    % hist3 is the same as accumarray
     newedges={1:length(XX),1:length(YY)};
-    
-    % getting the number of spikes in each bin
     [nspikes,~]=hist3(cellspikes(:,2:3),'Edges',newedges);
     
-    
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%% Now filter based on pixels %%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%% Now filter pixels based on visit counts and time spent %%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     % calculating visits:
     I_X=zeros(1,length(velcoords(:,2)));
@@ -342,32 +346,15 @@ else
     
     
     [nvisits,~]=hist3([velcoords(newvisitstimes>0,2),velcoords(newvisitstimes>0,3)],'Edges',newedges);
+
     
-    
-    % now occupation
-    
-    
-    % now pixels that have really low visits and really high firing rates;
-    highfr=reshape(nspikes,1,numel(nspikes));
-    highfr=highfr(highfr~=0); % to only use pixels with spikes (theres alot of dead space)
-    % these are the pixels where the firing rate was top 5%
-    %[f,x]=ecdf(highfr);
-    %highrate=mean(x(f>.95)); % find the average of all the high pixels
-    
-    % nix pixels that werent occupied
-    badpix=(noccup<mintimespent);
-    goodpix=~badpix;
-    
-    
-    
-    
+    % nix pixels that werent occupied long enough
+    goodpix=noccup>=mintimespent;
     % nix pixels that werent visited enough times
     Valid=(nvisits>minvisits).*goodpix;
     % and fills the holes in that box
     Valid=imfill(Valid);
-    
-    
-    
+
     % valid is now what we will use to plot occupancy, and to remove pixels
     % after the grid is smoothed
     
@@ -375,49 +362,55 @@ else
     %%%% now i smooth %%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    % There are two options here, first to convolve separately, which
-    %  is how the mosers did it back in their 05? paper
-    % the other way is to convolve after the fact. which may be more
-    % appropriate because its most likely that outlier pixels for spikerate
-    % will also be outlier pixels for occupancy. I have not found that an
-    % outlier in occupancy has an outlier in rate, but if thats hte case then
-    % convolve separately
-    
+    %{
+    There are two options here, first to convolve separately, which
+     is how the mosers did it back in their 05? paper
+    the other way is to convolve after the fact. which may be more
+    appropriate because its most likely that outlier pixels for spikerate
+    will also be outlier pixels for occupancy. I have not found that an
+    outlier in occupancy has an outlier in rate, but if thats hte case then
+    convolve separately
+
     
     % we will have to smooth occupancy bur remove bad pixels;
-    nspikes=nspikes.*Valid;
-    noccup=noccup.*Valid;
+
     
     %%%%%% heres the code to smooth before you divide spikes by occupancy
     
     %smoothoccup = SmoothMat(noccup, [Gausswin,Gausswin], Gaussdev);
-    
-    % we can smooth all spikes because they all will be valid
+
     %smoothspikes = SmoothMat(nspikes, [Gausswin,Gausswin], Gaussdev);
     
     
     % now get ratemap
     %ratemap=smoothspikes./smoothoccup;
     
+    %}    
+    
+    
+    
+    % take only valid pixels
+    nspikes=nspikes.*Valid; noccup=noccup.*Valid;
     ratemap=nspikes./noccup;
-    rawratemap=ratemap.*Valid;
-    rawratemap(isnan(rawratemap))=0;
-    %ratemap(isnan(ratemap))=0; % in case youre not using nanconv, this will
-    %smooth down all edges
+    
+    % Save out raw ratemap
+    rawratemap=ratemap.*Valid; rawratemap(isnan(rawratemap))=0;
+    
+    % smooth the map here
     ratemap=SmoothMat2(ratemap,[Gausswin,Gausswin], Gaussdev);
     
-    % and fill in where there is no occupancy
+    % and fill in where there is no occupancy (triple check
     ratemap=ratemap.*Valid;
     
-    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%% Clean up the image %%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     %i have to transpose all matrices now so their dimensions agree
     alphadata = (Valid' == 0);
     ratemap=ratemap';
     % this is an output so it should agree too
     noccup2=noccup';
-    
-    
     
     % create a white background
     white = cat(3, ones( size(ratemap)), ones( size(ratemap)), ones( size(ratemap)));
@@ -476,9 +469,9 @@ else
         set(gcf,'Colormap',jet(256));
         axis off
         set(gca,'YDir','normal')
-        colorbar
-        FRinterval=linspace(0,clim,6);
-        f=colorbar; set(f,'YTickLabel',FRinterval(2:end));
+        FRticks=linspace(0,1,6);
+        FRinterval=round(linspace(0,clim,6),1);
+        f=colorbar; set(f,'YTick',FRticks,'YTickLabel',FRinterval);
         
         %%%%%%%%%%%%%%%%%%%%%%%
         % now cosmetic stuff%%%
@@ -506,9 +499,36 @@ else
         
         % this puts white in the background
         try
-            title({[session.name ' unit ' num2str(unit.units) ' ' EpochName],['mean firing rate = ' num2str(average_fr) 'Hz']} );
+            title({[' unit ' num2str(unit.units) ' ' EpochName],['mean firing rate = ' num2str(average_fr) 'Hz']} );
         end
     end
 end
+end
+
+
+
+% just a function to plot shit
+function plotitout
+
+
+
+smoothx=movsum(coorddata(:,2),12,'Endpoints','fill')/12;
+smoothy=movsum(coorddata(:,3),12,'Endpoints','fill')/12;
+displacement2=sqrt(diff(smoothx).^2+diff(smoothy).^2)/PixPerCM;
+velocity2=smooth(displacement2./dt,vfactor,'moving');
+
+sp=subplot(3,1,1); plot(timestamps(1:10000),xycoords(1:10000,1));
+hold on;
+plot(timestamps(1:10000),xycoords(1:10000,2))
+sp(2)=subplot(3,1,2);
+plot(timestamps(1:10000),displacement(1:10000));
+hold on
+plot(timestamps(1:10000),displacement2(1:10000));
+sp(3)=subplot(3,1,3);
+plot(timestamps(1:10000),velocity(1:10000));
+hold on;
+plot(timestamps(1:10000),velocity2(1:10000));
+linkaxes(sp,'x');
+
 end
 

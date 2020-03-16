@@ -32,9 +32,9 @@ p=inputParser;
 addOptional(p,'Gausswin',20);
 addOptional(p,'Gaussdev',1);
 addOptional(p,'Factor',12);
-addOptional(p,'minvelocity',0.1);
+addOptional(p,'minvelocity',5); % in cm/sec
 addOptional(p,'mintimespent',.2);  % or about 5 timestamps
-addOptional(p,'minvisits',1);
+addOptional(p,'minvisits',1); 
 addOptional(p,'velsmooth',.2); % in seconds
 addOptional(p,'spikethreshold',50);
 addOptional(p,'clim',[]);

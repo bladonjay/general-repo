@@ -6,7 +6,7 @@ function mat = SmoothMat2(mat, kernel_size, std)
 % if std==0, just returns mat
 %
 % 10 december 2009 andrew
-% this sequel uses bens nanconvolve script
+% this sequel uses bens nanconv script
 % JHB 9-4-14
 
 if nargin<3

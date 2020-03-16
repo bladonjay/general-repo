@@ -19,10 +19,11 @@ donehandle=guistructure.togglebutton2;
 
 %Set image as backdrop
 if exist('im','var')
-    imshow(im,'Parent',imagehandle, 'XData',[1 1024],'YData',[768 1]);
-    hold(imagehandle,'on')
+    if ~isempty(im)
+        imshow(im,'Parent',imagehandle, 'XData',[1 1024],'YData',[768 1]);
+        hold(imagehandle,'on')
+    end
 end
-
 %Plot tracking
 plot(imagehandle,xydata(:,1),xydata(:,2),'Color',[0.5 0.5 0.5]);
 axis(imagehandle,[0 max(xydata(:,1))*1.1 0 max(xydata(:,2))*1.1]);

@@ -34,7 +34,7 @@ p=inputParser;
 addOptional(p,'Gausswin',40); % huge cause it drops off real quick
 addOptional(p,'Gaussdev',1);
 addOptional(p,'Factor',6); % meaning pixels per bin
-addOptional(p,'minvelocity',20); % in pixels per second
+addOptional(p,'minvelocity',3); % in pixels per second
 addOptional(p,'mintimespent',.05);  % or about 5 timestamps
 addOptional(p,'minvisits',2);
 addOptional(p,'velsmooth',.5); % in seconds
@@ -121,7 +121,7 @@ dt = diff(session.edit_coords(:,1));
 % this is if time were continuous, the elapsed is the length of time
 % assigned to that ts
 
-
+% this take sthe hypotenuse of the raw coordinate data
 displacement=sqrt(diff(session.edit_coords(:,2)).^2+diff(session.edit_coords(:,3)).^2)/median(dt);
 % remove if youre only moving one or two pixels over
 %this is a non smoothed displacement, we may want to bin this to remove the
@@ -135,7 +135,7 @@ vfactor=round((velsmooth/median(dt))/2)*2-1;
 rawvelocity=smooth(displacement,vfactor,'moving'); % mnaybe a gaussian window
 velocity=(rawvelocity.*dt)* 30; % in pixels per second
 % there will be some high velocity timestamps because the strobe jumps a
-% bit, generally about 60 jumps between 2 and 10 se conds
+% bit, generally about 60 jumps between 2 and 10 seconds
 velcoords = (cat(2,tcoord,tempcoords(:,1),tempcoords(:,2),velocity,dt));
 %coords now with velocities and latencies
 % cols as follows
@@ -157,6 +157,8 @@ SpikeTimes=unit.ts(:,1);
 % timejumps is the index of the coordinate BEFORE the delay
 timejumps = [];
 timejumps = cat(1,timejumps,find(diff(tcoord) > timejumpdelay));
+% if there are any blocks too close to the end just ditch the end
+timejumps(timejumps>=length(tcoord)-2)=[];
 % data isnt interpolated, so we will have to use a timejump window of
 % around 10, not .334 (which is strobe rate)
 binspikes = [];

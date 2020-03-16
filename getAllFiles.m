@@ -5,21 +5,22 @@ function fileList = getAllFiles(dirName,extension)
   fileList = {dirData(~dirIndex).name}';  %'# Get a list of the files
   
   if exist('extension','var')
-  if isnumeric(extension)
-    fileList=fileList(cellfun(@any,strfind(fileList,'.mat'))); %only take matlab files
-  else
-      try
-          fileList=fileList(cellfun(@any,strfind(fileList,extension)));
-      catch
-          warning('couldnt use extension');
+      if isnumeric(extension)
+          fileList=fileList(cellfun(@any,strfind(fileList,'.mat'))); %only take matlab files
+      else
+          try
+              fileList=fileList(cellfun(@any,strfind(fileList,extension)));
+          catch
+              warning('couldnt use extension');
+          end
       end
   end
-  
-  
+
   if ~isempty(fileList)
       fileList = cellfun(@(x) fullfile(dirName,x),...  %# Prepend path to files
           fileList,'UniformOutput',false);
   end
+  
   subDirs = {dirData(dirIndex).name};  %# Get a list of the subdirectories
   validIndex = ~ismember(subDirs,{'.','..'});  %# Find index of subdirectories
   %#   that are not '.' or '..'
