@@ -1,26 +1,36 @@
-function [mergedstruct] = MergeStructs(newstruct,oldstruct,mergemethod)
+function [mergedstruct] = MergeStructs(oldstruct,newstruct,mergemethod)
 % function [mergedstruct] = MergeStructs(newstruct,oldstruct,mergemethod)
 % this function merges two structs.  Basically it will either append the
 % new struct onto the bottom of the old, or it will update all the fields
-% in the old struct to become those in the new
+% in the old struct to become those in the new. The resulting struct will
+% have the fields of the new struct.  To merge two structs completely, you
+% can call this function twice, reversing the order fo the structs.
 
+newfields=fieldnames(newstruct);
+oldfields=fieldnames(oldstruct);
+allfields=unique([newfields; oldfields]);
 switch mergemethod
-    case 'merge'
-        % in this case, we will add to each field
+    % in this case, all fields that exist in the old struct are puit in the
+    % new struct
+    case 'keep'
+        for i=1:length(allfields)
+           if exist(oldstruct,(allfields(i)))
+               if ~isempty(oldstruct.(allfields(i)))
+                   mergedstruct.(allfields(i))=oldstruct.allfields(i);
+               else
+                   mergedstruct.(allfields(i))=newstruct.allfields(i);
+               end
+           else
+               mergedstruct.(allfields(i))=newstruct.allfields(i);
+           end
+        end
+        % in this case, the new struct overwrites the old struct, but if
+        % the new struct doesnt have those fields, they're imported from
+        % the old struct
+    case 'update'
+        
         temp=[];
-        
-    case 'overwrite'
-        % in this case we will overwrite any fields that are there, or add
-        % new fields in, but keep old fields
-        temp=[];
-        
-        
-    case 'append'
-        % in this case we will make sure the two structs have the same
-        % fields, then we will tack the new struct onto the old struct
-        temp=[];
-        
-        
+
 end
 
 
@@ -32,24 +42,4 @@ end
 
 
 
-function newstruct = checkfieldtypes(newstruct, refstruct)
-fields = fieldnames(refstruct);
-
-for j = 1:size(fields,1)
-    % if new struct doesnt have the field, or its class is
-    % wrong, new struct takes old structs field
-    if(~isfield(newstruct,fields{j}) || ...
-            ~isa(newstruct.(fields{j}),class(refstruct.(fields{j}))))
-        newstruct.(fields{j}) = refstruct.(fields{j});
-        % if newstruct has a field but its empty, or it has a nan
-    elseif(isnumeric(newstruct.(fields{j})) && ...
-            (isempty(newstruct.(fields{j})) || ...
-            any(isnan(newstruct.(fields{j})))))
-        newstruct.(fields{j}) = refstruct.(fields{j});
-        warning(['Invalid number entered for ' fields{j} ', resetting to default value.'],'Invalid Entry');
-    elseif(isstruct(newstruct.(fields{j})))
-        newstruct.(fields{j}) = checkfieldtypes(newstruct.(fields{j}), refstruct.(fields{j}));
-    end
-end
-end
 

@@ -28,8 +28,5 @@ newcoords=oldcoords(logical(keepts),:);
 % and segments are when those transitions occur.
 segments=find(diff(keepts)~=0);
 
-
-
-
 end
 

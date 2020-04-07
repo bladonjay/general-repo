@@ -31,35 +31,32 @@ spiketimes3=spiketimes2-start;
 % this cuts ends off too for a danger zone to not shift too little
 cut_pool=minshift: .1 :finish-start-minshift;
 
-% if we have enough spikes for analysis
-%if length(spiketimes3)>2
-    
-    % now pull random timestamp from numbergenerator
-    cutposition=datasample(cut_pool,1);
-    
-    % now circular shift those numbers
-    
-    % all numbers below our point get shifted forward (Basically add our
-    % newstart to these data
-    firsthalf=spiketimes3(spiketimes3<cutposition);
-    
-    % add the end chunk on front (the length of time thats the second
-    % chunk)
-    newsecondhalf=firsthalf+(finish-start)-cutposition;
-    
-    % all numbers above our point start from 0 (secondhalf first ind will be 0)
-    secondhalf=spiketimes3(spiketimes3>=cutposition);
-    
-    % now subtract our cutposition from those, and then put them together
-    % with the new second half
-    shuffledspikes=[secondhalf-cutposition; newsecondhalf];
-    
-    % now put the spikes back to the start time
-    newspiketimes=shuffledspikes+start;
-    
-    % and save our bracketed spike times (original times in that epoch)
-    bracketedspiketimes=spiketimes2;
-%else
-    %newspiketimes=nan;
+
+% now pull random timestamp from numbergenerator
+cutposition=datasample(cut_pool,1);
+
+% now circular shift those numbers
+
+% all numbers below our point get shifted forward (Basically add our
+% newstart to these data
+firsthalf=spiketimes3(spiketimes3<cutposition);
+
+% add the end chunk on front (the length of time thats the second
+% chunk)
+newsecondhalf=firsthalf+(finish-start)-cutposition;
+
+% all numbers above our point start from 0 (secondhalf first ind will be 0)
+secondhalf=spiketimes3(spiketimes3>=cutposition);
+
+% now subtract our cutposition from those, and then put them together
+% with the new second half
+shuffledspikes=[secondhalf-cutposition; newsecondhalf];
+
+% now put the spikes back to the start time
+newspiketimes=shuffledspikes+start;
+
+% and save our bracketed spike times (original times in that epoch)
+bracketedspiketimes=spiketimes2;
+
 end
 

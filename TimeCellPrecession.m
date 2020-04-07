@@ -1,6 +1,6 @@
 function [precessionstats,precessionimage] = TimeCellPrecession(trspikes,phases)
 % function [precessionstats,precessionimage] = TimeCellPrecession(spikes,phases,bins)
-% spikes=vector of event locked timestamps
+% trspikes=vector of event locked timestamps (or positional bins)
 % phases=the phase of those spikes
 % bins (not necessary)
 % ouitput

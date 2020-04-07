@@ -47,6 +47,7 @@ addOptional(p,'Timejumpdelay',1);
 addOptional(p,'suppress',0);
 addOptional(p,'onlyheat',0);
 addOptional(p,'realcoords',0);
+addOptional(p,'ColorScheme','jet');
 parse(p,varargin{:});
 
 
@@ -87,7 +88,7 @@ timejumpdelay=p.Results.Timejumpdelay;
 
 % real coordinates so that you can compare pixels
 realcoords=p.Results.realcoords;
-
+colorscheme=p.Results.ColorScheme;
 
 
 % output variables;
@@ -487,7 +488,14 @@ else
     
     colormap_fr =linspace(0,clim,255);
     [~,colormap]=histc(ratemap,colormap_fr);
-    rgbcolormap=ind2rgb(colormap,jet(256));
+    
+    mymap=str2func(colorscheme);
+    colorscale=mymap(256);
+    try
+        rgbcolormap=ind2rgb(colormap,colorscale);
+    catch
+        rgbcolormap=ind2rgb(colormap,jet(256));
+    end
     
     if grayout
         finalcolormap1=immerge(rgbcolormap,gray,nospikes);
@@ -500,7 +508,7 @@ else
             n=subplot(2,1,2,'align');
         end
         q=image(finalcolormap); %,'AlphaData',noccup');
-        set(gcf,'Colormap',jet(256));
+        set(gcf,'Colormap',colorscale);
         axis off
         set(gca,'YDir','normal')
         %colorbar
