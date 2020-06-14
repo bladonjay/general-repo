@@ -19,6 +19,7 @@ function [IsolationStats] = L_RatioTest(mywfs,otherwfs,df)
 %   CovAll
 
 %  JHB
+% adapted from schmitzer-torbert 20
 
 % not gonna use the parser for now
 if (~exist('df','var') || size(temp)~=1)
@@ -56,7 +57,8 @@ IsoDist=nmdist(min([length(wmdist) length(nmdist)]));
 
 % L ratio is the area inside the curve of i really dont know but below is
 % the math
-dfreedom=df; % should figure this out but its usually trodality
+dfreedom=df; % should figure this out but i
+dfreedom=size(allwfs,2);
 CDFnoise=cdf('Chisquare',nmdist,dfreedom);
 if CDFnoise==0
     L_Ratio=nan;

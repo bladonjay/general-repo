@@ -30,7 +30,7 @@ numevents = length(event);
 
 numfoundspikes = 0; % total number of spikes
 spikes=[]; % vector of raw ts for each event
-spksevs=[]; % vector of the # of spikes found for every event
+spksevs=zeros(numevents,1); % vector of the # of spikes found for every event
 foundindices={[]}; % cell mat of the indices per event
 foundspikes={[]}; % cell mat of the raw spike ts per event
 foundevspikes={[]}; % cell mat of found spikes locked to event
