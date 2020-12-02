@@ -11,6 +11,7 @@ function [spikes, spksevs, evspikes, foundindices, foundspikes, foundevspikes] =
 % evspikes: the spike ts as related to the event
 % foundindices: the indices of the found spikes in a cell vector
 % foundspikes: same, in a cell vector
+% foundevspikes: evspikes but in cell vector by trial
 %JRM
 % JHB
 % spkevs is the number of spikes that happened for each event over the
