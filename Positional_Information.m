@@ -26,6 +26,8 @@ function [Ipos]=Positional_Information(X,K)
 %idle time and when the animal is replaying
 
 
+% JHB 12-7-2020
+
 % xi=pixels: e.g. the linearized positions (will refer the to the unique
 % positions that are in the third column of your big matrix
 % lets get the occupancy map
@@ -90,7 +92,6 @@ end
 
 % so to measure positional information across each pixel:
 
-% Positiponal information at each pix
 % basically sum over all rates at pixel k, its the prob of that rate at
 % that pixel times the log rate at that pixel over all times that rate came
 % up
@@ -102,7 +103,7 @@ end
 for i=1:length(Xi)
     %tic
     % for each unique spikerate we saw in that bin
-    clear overall;
+    overall=nan;
     myspikes=unique(pixelspikes{i}); % % get all the unique firing rates
     for j=1:length(myspikes)
         % P(k|xi)
