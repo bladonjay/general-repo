@@ -22,7 +22,7 @@ function [mergedstruct] = MergeStructs(oldstruct,newstruct,mergemethod)
 % empty fields in the old and new structs if they dont ahve those fields.
 
 if ~exist('mergemethod','var')
-    mergemethod='addOne';
+    mergemethod='addon';
 end
 
 mergemethod=lower(mergemethod);
@@ -63,7 +63,7 @@ switch mergemethod
         end
         % in this case this just adds a new struct on bottom but only uses
         % the old fields
-    case 'addone'
+    case 'addon'
         for i=1:length(oldfields)
             for j=1:length(oldstruct)
                 mergedstruct(j).(oldfields{i})=oldstruct(j).(oldfields{i});
@@ -76,7 +76,7 @@ switch mergemethod
                 end
             end
         end
-        % in this case we just add everything
+        % in this case we just add alln of new struct to old struct
     case 'addall'
         % first add all
         for i=1:length(oldfields)
@@ -84,13 +84,14 @@ switch mergemethod
                 mergedstruct(j).(oldfields{i})=oldstruct.(oldfields{i});
             end
             for j=1:length(newstruct)
-                if isfield(newstruct,oldfiends(i))
+                if isfield(newstruct,oldfields(i))
                     mergedstruct(oldlength+j).(oldfields{i})=newstruct(j).(oldfields{i});
                 else
                     mergedstruct(oldlength+j).(oldfields{i})=[];
                 end
             end
         end
+
         for i=1:length(newonly)
             for j=1:length(oldstruct)
                 mergedstruct(j).(newonly{i})=[];
@@ -99,7 +100,7 @@ switch mergemethod
                 mergedstruct(oldlength+j).(newonly{i})=newstruct(j).(newonly{i});
             end
         end
-
+        
 end
 
 mergedstruct=orderfields(mergedstruct);
