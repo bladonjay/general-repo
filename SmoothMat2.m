@@ -23,6 +23,6 @@ kernel = pdf('Normal', Rgrid, 0, std);
 
 kernel = kernel./sum(sum(kernel));
 
-mat = nanconv(mat, kernel, 'same','edge');
+mat = nanconv(mat, kernel, 'same','edge','nanout',true);
 end
 

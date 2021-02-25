@@ -38,7 +38,7 @@ end
 
 % Apply default options when necessary.
 if(exist('edge','var')~=1); edge = false; end
-if(exist('nanout','var')~=1); nanout = false; end
+if(exist('nanout','var')~=1); nanout = true; end
 if(exist('is1D','var')~=1); is1D = false; end
 if(exist('shape','var')~=1); shape = 'same';
 elseif(~strcmp(shape,'same'))
