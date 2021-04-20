@@ -16,6 +16,7 @@ function [ripEvents,ripEEG] = GetRippleEvents(eeg,varargin)
 %       smoothing the envelope of our ripple power.
 %   minDelay: min off time before next ripple, if its below this, the
 %       ripples are combined
+%   minRipLength: min duration of ripple (in miliseconds)
 % OUTPUTS
 %   ripEvents: Struct iwth fields:
 %       Area: the duration basically (i'll convert to msec
@@ -27,57 +28,77 @@ function [ripEvents,ripEEG] = GetRippleEvents(eeg,varargin)
 p = inputParser;
 
 addOptional(p,'minZ',1);
-addOptional(p,'minPeakZ',3);
-addOptional(p,'smoothSpan',5);
-addOptional(p,'minDelay', 50);
+addOptional(p,'minPeakZ',4);
+addOptional(p,'smoothSpan',4);
+addOptional(p,'minRipLength',40);
+addOptional(p,'minDelay', 20);
 parse(p);
 
 minZ=p.Results.minZ;
 minPeakZ=p.Results.minPeakZ;
 smoothSpan=p.Results.smoothSpan;
+minRipLength=p.Results.minRipLength;
+minDelay=p.Results.minDelay;
 
 try
-    load('ripple1k.mat');
+    ripple1k=load('ripple1k.mat');
+ 
 catch
     [myfile,mypath]=uigetfile('','Find the filter file');
-    load(fullfile(mypath,myfile));
+    ripple1k=load(fullfile(mypath,myfile));
 end
+ripple1k=ripple1k.ripple1k;
+
 
 ripEEG=filtereeg2(eeg,ripple1k,'int16',0); % the guts here is filtfilt2(kernel,1,rawdata
 
 ripraw=ripEEG.data(:,3); % 3 is amplitude envelope
 
-ripsmooth=SmoothMat2(ripraw,[1, smoothspan*4],smoothspan); % smooth out 4x the std
+ripsmooth=SmoothMat2(ripraw,[1, smoothSpan*4],smoothSpan); % smooth out 4x the std
 ripZ=zscore(ripsmooth); % zscore our envelope
 ripEEG.data(:,4)=ripZ;
 
-ripEvents=regionprops(ripZ>putativepwr,ripZ,'Area',...
-    'Centroid','PixelValues','MeanIntensity','BoundingBox');
+
+
+ripEventsPrelim=regionprops(ripZ>minZ,ripZ,'PixelValues','BoundingBox');
 
 % cut rips who dont peak high enough
-ripEvents=ripEvents(cellfun(@(a) max(a)>peakpwr, {ripEvents.PixelValues}));
+ripEventsPrelim=ripEventsPrelim(cellfun(@(a) max(a)>minPeakZ, {ripEventsPrelim.PixelValues}));
+
+% reorganize bounding box so its useful
+for j=1:length(ripEventsPrelim)
+      ripEventsPrelim(j).BoundingBox=round([ripEventsPrelim(j).BoundingBox(2)...
+          ripEventsPrelim(j).BoundingBox(2)+ripEventsPrelim(j).BoundingBox(4)]);
+end
+
+% combine events that are close by bridging the inbetweens
+for j=2:length(ripEventsPrelim)
+    if ripEventsPrelim(j-1).BoundingBox(2)+minDelay>ripEventsPrelim(j).BoundingBox(1)
+        % make all the inbetween values above threshold
+        ripZ(ripEventsPrelim(j-1).BoundingBox(2):ripEventsPrelim(j).BoundingBox(1))=...
+            minZ*1.1;
+    end
+end
+
+% recalculate the events
+ripEvents=regionprops(ripZ>minZ,ripZ,'Area',...
+    'Centroid','PixelValues','MeanIntensity','BoundingBox');
+
+
+% cut rips who dont peak high enough
+ripEvents=ripEvents(cellfun(@(a) max(a)>minPeakZ, {ripEvents.PixelValues}));
+
 
 % now cut rips that are too short
-ripEvents=ripEvents(cellfun(@(a) a>minRipLength*eeg.samprate, {ripEvents.Area}));
+ripEvents=ripEvents(cellfun(@(a) a>minRipLength, {ripEvents.Area}));
 
 % now clean up the fields, 
 % and if necessary cut or combine rips too soon after the previous ripple
-%lastRipEnd=nan; killist=[];
 
 for i=1:length(ripEvents)
-    ripEvents(i).Centroid=ripEvents(i).Centroid(end);
-    ripEvents(i).BoundingBox=[ripEvents(i).BoundingBox(2) ripEvents(i).BoundingBox(2)+ripEvents(i).BoundingBox(4)];
-    ripEvents(i).Area=ripEvents(i).Area*eeg.samprate;
-    
-    % insert code here to see if the beginning of this rip is too close to
-    % the end of the last rip
-    %{
-    if potrips(i).BoundingBox(1)<(lastRipEnd+minDelay)
-        % combine
-        potrips(i-1).BoundingBox(2)=potrips(i).BoundingBox(2);
-    end
-    lastRipEnd=
-    %}
+    ripEvents(i).Centroid=round(ripEvents(i).Centroid(end));
+    ripEvents(i).BoundingBox=round([ripEvents(i).BoundingBox(2) ripEvents(i).BoundingBox(2)+ripEvents(i).BoundingBox(4)]);
+    ripEvents(i).Area=ripEvents(i).Area/eeg.samprate;
 end
 
 end
