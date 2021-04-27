@@ -26,7 +26,11 @@ function fileList = getAllFiles(dirName,extension)
   %#   that are not '.' or '..'
   for iDir = find(validIndex)                  %# Loop over valid subdirectories
       nextDir = fullfile(dirName,subDirs{iDir});    %# Get the subdirectory path
-      fileList = [fileList; getAllFiles(nextDir)];  %# Recursively call getAllFiles
+      if exist('extension','var')
+      fileList = [fileList; getAllFiles(nextDir,extension)];  %# Recursively call getAllFiles
+      else
+          fileList = [fileList; getAllFiles(nextDir)];  %# Recursively call getAllFiles
+      end
   end
   
   end
