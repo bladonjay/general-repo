@@ -6,6 +6,9 @@ function [ripEvents,ripEEG] = GetRippleEvents(eeg,varargin)
 %       data: raw data values (voltage)
 %       samprate: should be 1000, or 1500
 %       starttime: usually 0, or first increment (0.001 or 0.000667)
+%       LFPts: not completely necessary but if so you will get your
+%       bounding box... if its not there, we extrapolate from samprate and
+%       starttime
 %       descript: 'recorded at... filtered at...'
 %   OPTIONAL:
 %   minZ: min z value for calculating duration and start-end of ripple, in
@@ -16,7 +19,9 @@ function [ripEvents,ripEEG] = GetRippleEvents(eeg,varargin)
 %       smoothing the envelope of our ripple power.
 %   minDelay: min off time before next ripple, if its below this, the
 %       ripples are combined
-%   minRipLength: min duration of ripple (in miliseconds)
+%   minRipLength: min duration of ripple (in miliseconds)\
+%
+%   
 % OUTPUTS
 %   ripEvents: Struct iwth fields:
 %       Area: the duration basically (i'll convert to msec
@@ -27,18 +32,20 @@ function [ripEvents,ripEEG] = GetRippleEvents(eeg,varargin)
 
 p = inputParser;
 
-addOptional(p,'minZ',1);
+addOptional(p,'minZ',1.5);
 addOptional(p,'minPeakZ',4);
-addOptional(p,'smoothSpan',4);
+addOptional(p,'smoothSpan',6); % in bins (msec here)
 addOptional(p,'minRipLength',40);
-addOptional(p,'minDelay', 20);
-parse(p);
+addOptional(p,'minDelay', 10);
+addOptional(p,'allspikes',[]);
+parse(p,varargin{:});
 
 minZ=p.Results.minZ;
 minPeakZ=p.Results.minPeakZ;
 smoothSpan=p.Results.smoothSpan;
 minRipLength=p.Results.minRipLength;
 minDelay=p.Results.minDelay;
+allspikes=p.Results.allspikes;
 
 try
     ripple1k=load('ripple1k.mat');
@@ -81,7 +88,7 @@ for j=2:length(ripEventsPrelim)
 end
 
 % recalculate the events
-ripEvents=regionprops(ripZ>minZ,ripZ,'Area',...
+ripEvents=regionprops(ripZ>minZ,ripZ,'Area','PixelList',...
     'Centroid','PixelValues','MeanIntensity','BoundingBox');
 
 
@@ -96,10 +103,44 @@ ripEvents=ripEvents(cellfun(@(a) a>minRipLength, {ripEvents.Area}));
 % and if necessary cut or combine rips too soon after the previous ripple
 
 for i=1:length(ripEvents)
+    
+    [ripEvents(i).peak,peakidx]=max(ripEvents(i).PixelValues);
+        
     ripEvents(i).Centroid=round(ripEvents(i).Centroid(end));
     ripEvents(i).BoundingBox=round([ripEvents(i).BoundingBox(2) ripEvents(i).BoundingBox(2)+ripEvents(i).BoundingBox(4)]);
+    ripEvents(i).peakInd=ripEvents(i).BoundingBox(1)+peakidx-1;
+
     ripEvents(i).Area=ripEvents(i).Area/eeg.samprate;
+    ripEvents(i).peakTime=[];
+
+    ripEvents(i).burst=[];
+    ripEvents(i).windowTS=[];
+
+
+    if isfield(eeg,'LFPts')
+        ripEvents(i).windowTS=[eeg.LFPts(ripEvents(i).BoundingBox(1)),...
+            eeg.LFPts(ripEvents(i).BoundingBox(2))];
+        ripEvents(i).peakTime=eeg.LFPts(ripEvents(i).peakInd);
+    elseif isfield(eeg,'starttime')
+        ripEvents(i).windowTS=[ripEvents(i).BoundingBox(1),...
+            ripEvents(i).BoundingBox(2)].*eeg.samprate+eeg.starttime;
+        ripEvents(i).peakTime=ripEvents(i).peakInd*eeg.samprate+eeg.starttime;
+    end
+    % if we found a way to get timestamps, lets do spikerates
+    if ~isempty(allspikes) && ~isempty(ripEvents(i).windowTS)
+        [~,~,~,spkinds]=event_spikes(allspikes(:,1),ripEvents(i).windowTS(1),0,...
+            diff(ripEvents(i).windowTS));
+        ripEvents(i).spks=allspikes(cell2mat(spkinds),:);
+
+
+        if length(unique(ripEvents(i).spks(:,2)))>=4
+            ripEvents(i).burst=1;
+        else
+            ripEvents(i).burst=0;
+        end
+    end
 end
+
 
 end
 
