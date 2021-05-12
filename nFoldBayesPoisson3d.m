@@ -25,8 +25,8 @@ function [predicted_real,predicted_null,realProbMat,nullProbMat] = nFoldBayesPoi
 
 % crucial input dimensions
 Trials=1:size(spkmat,1);
-Classes=1:size(spkmat,3);
 Neurons=1:size(spkmat,2);
+Classes=1:size(spkmat,3);
 
 % preallocate outputs
 predicted_real=nan(nFold,length(Classes));
@@ -50,12 +50,15 @@ for k=1:nFold
     % traiing set
     Priors=permute(nanmean(spkmat(cv.training(k),:,:),1),[3 2 1]); % mean across study trials (Mclasses x Nunits x 1)
     Priors(Priors==0)=realmin; % cast silent cells into really low rates to prevent error out
-    testmat=nanmean(spkmat(cv.test(k),:,:),1); % the 1 x N units x Oclasses
+    testmat=nanmean(spkmat(cv.test(k),:,:),1); % the 1 x N units x Oclasses (real time)
  
     %p(x|spikes)=C(prod across units (mean rates)^spikes_i ) * exp( -tau * sum(all rates at x)
     % C  normalizes sum probability to equal 1
     
     % prodmat is a M study classes by N test classes
+    % so each row is the likelihood of that time given each real time
+    % each column then is given that real time, the relative likelihood of
+    % each guess
     prodmat=prod((Priors.^testmat),2); % prod across units i (mean_i)^spikes_i
     
     summat=sum(Priors,2); % sum across units (mean_i)
@@ -63,7 +66,7 @@ for k=1:nFold
     probmat=prodmat.*exp(-tau.*summat);
     % sum p across potential odors must ==1 (the c term)
     realProb=probmat./sum(probmat,1);
-    [~,decoded(k,:)]=max(squeeze(realProb),[],2); % squeeze dim3 into dim2 (dim2 is now the likelihood of that study class)
+    [~,decoded(k,:)]=max(squeeze(realProb),[],1); % squeeze dim3 into dim2 (dim2 is now the likelihood of that study class)
     % p success needs to be recalculated to accoutn for dimension shift
     realProbMat(:,:,k)=squeeze(realProb); % the probability of all others
     [~,predicted_real(k,:)]=max(realProbMat(:,:,k));
@@ -90,9 +93,9 @@ if nBoots>0
             tau=1; % tau is basically a conversion to n spikes per second (but we've already done that)
             probmat=prodmat.*exp(-tau.*summat);
             shuffProb=probmat./sum(probmat,1);
-            [~,decodedShuff(k,:)]=max(squeeze(shuffProb),[],2); % squeeze dim3 into dim2 (dim2 is now the likelihood of that study class)
+            [~,decodedShuff(k,:)]=max(squeeze(shuffProb),[],1); % squeeze dim3 into dim2 (dim2 is now the likelihood of that study class)
             probMatBoot(:,:,k)=squeeze(shuffProb); % the probability of all others
-            [~,predicted_null(k,:,boot)]=max(realProbMat(:,:,k));
+            [~,predicted_null(k,:,boot)]=max(probMatBoot(:,:,k));
         end
         nullProbMat(:,:,boot)=nanmean(probMatBoot,3);
     end

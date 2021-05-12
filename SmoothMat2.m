@@ -1,4 +1,4 @@
-function mat = SmoothMat2(mat, kernel_size, std)
+function mat = SmoothMat2(mat, kernel_size, std, nanout)
 %
 % Smooths matrix by convolving with 2d gaussian of size
 % kernel_size=[bins_x bins_y] and standard deviation 'std'
@@ -8,6 +8,10 @@ function mat = SmoothMat2(mat, kernel_size, std)
 % 10 december 2009 andrew
 % this sequel uses bens nanconv script
 % JHB 9-4-14
+
+if ~exist('nanout','var')
+    nanout=true;
+end
 
 if nargin<3
     std=1;
@@ -23,6 +27,6 @@ kernel = pdf('Normal', Rgrid, 0, std);
 
 kernel = kernel./sum(sum(kernel));
 
-mat = nanconv(mat, kernel, 'same','edge','nanout',true);
+mat = nanconv(mat, kernel, 'same','edge','nanout',nanout);
 end
 
