@@ -32,7 +32,7 @@ function [ripEvents,ripEEG] = GetRippleEvents(eeg,varargin)
 
 p = inputParser;
 
-addOptional(p,'minZ',1.5);
+addOptional(p,'minZ',1.2);
 addOptional(p,'minPeakZ',4);
 addOptional(p,'smoothSpan',6); % in bins (msec here)
 addOptional(p,'minRipLength',40);
