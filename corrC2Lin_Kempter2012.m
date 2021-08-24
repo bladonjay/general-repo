@@ -30,8 +30,11 @@ n = length(phi);
 % use this for diff tr speed precession slopes
 % error: Exiting: Maximum number of function evaluations has been exceeded,
 % current value 56.39
-options=optimset('MaxFunEvals',10000,'MaxIter',10000); %added MaxIter for time vs distance phase rasters
+options=optimset('MaxFunEvals',100000,'MaxIter',10000); %added MaxIter for time vs distance phase rasters
+
 params = fminsearch(@(params) costFunct(params, x, phi), [pi, pi / (max(x)-min(x))],options);
+
+%params=fminbnd(@(params) costFunct(params, x, phi), 0, pi, options);
 
 a = params(2); 
 phi_knot = mod(params(1),2*pi);
