@@ -10,6 +10,11 @@ function [Skaggs_Info,Sparsity]= Skaggs_basic(p, f_cond, F)
 % any bins that never got visited?
 novisits=p==0;
 p(novisits)=[]; f_cond(novisits)=[];
+if ~exist('F','var')
+    F=nanmean(f_cond);
+elseif isempty(F)
+    F=nanmean(f_cond);
+end
 
 % info per pix
 I=p.*(f_cond./F).*log2(f_cond./F);
