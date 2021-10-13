@@ -1,4 +1,4 @@
-function [res_x, idx_of_result] = elbow_method(y,x,just_return,horizontal)
+function [res_x, idx_of_result] = elbow_method_par(y,x,just_return,horizontal)
 %function [res_x, idx_of_result] = knee_pt(y,x,just_return)
 %Returns the x-location of a (single) knee of curve y=f(x)
 %  (this is useful for e.g. figuring out where the eigenvalues peter out)
@@ -164,30 +164,10 @@ if ~horizontal
     %figure out the sum of per-point errors for left- and right- of-knee fits
     
     if verbose, figure('Position',[51    65   645   726]); end
-    for breakpt = 2:length(y)-1
-        
-        delsfwd = (mfwd(breakpt).*x(1:breakpt)+bfwd(breakpt))-y(1:breakpt);
-        delsbck = (mbck(breakpt).*x(breakpt:end)+bbck(breakpt))-y(breakpt:end);
-        %disp([sum(abs(delsfwd))/length(delsfwd), sum(abs(delsbck))/length(delsbck)])
-        if (use_absolute_dev_p)
-            % error_curve(breakpt) = sum(abs(delsfwd))/sqrt(length(delsfwd)) + sum(abs(delsbck))/sqrt(length(delsbck));
-            error_curve(breakpt) = sum(abs(delsfwd))+ sum(abs(delsbck));
-        else
-            error_curve(breakpt) = sqrt(sum(delsfwd.*delsfwd)) + sqrt(sum(delsbck.*delsbck));
-        end
-        if verbose
-            subplot(2,1,1);
-            plot(x,y,'k');
-            hold on;
-            plot(x(1:breakpt),(mfwd(breakpt).*x(1:breakpt)+bfwd(breakpt)),'r');
-            plot(x(breakpt:end),(mbck(breakpt).*x(breakpt:end)+bbck(breakpt)),'b');
-            hold off;
-            subplot(2,1,2);
-            plot(breakpt,error_curve(breakpt),'x');
-            hold on;
-            pause(.1);
-        end
+    parfor breakpt = 2:length(y)-1
+        error_curve(breakpt)=getdels(x,y,mfwd,bfwd,mbck,bbck,breakpt,use_absolute_dev_p);
     end
+    
     %find location of the min of the error curve
     [~,loc] = min(error_curve);
     res_x = x(loc);
@@ -200,22 +180,24 @@ else
         err_fwd=sum(abs(y(1:breakpt)-bfwd(breakpt)));
         err_bk=sum(abs(y(breakpt:end)-brev(breakpt)));
         error_curve(breakpt)=err_fwd+err_bk;
-        if verbose
-            subplot(2,1,1);
-            plot(x,y,'k');
-            hold on;
-            plot(x(1:breakpt),repmat(bfwd(breakpt),breakpt,1),'r');
-            plot(x(breakpt:end),repmat(brev(breakpt),length(brev)-breakpt+1,1),'b');
-            hold off;
-            subplot(2,1,2);
-            plot(breakpt,error_curve(breakpt),'x');
-            hold on;
-            pause(.1);
-        end
     end
     [~,loc] = min(error_curve);
     res_x = x(loc);
     idx_of_result = idx(loc);
     
+end
+end
+
+
+function [error_curve]=getdels(x,y,mfwd,bfwd,mbck,bbck,breakpt,use_absolute_dev_p)
+
+delsfwd = (mfwd(breakpt).*x(1:breakpt)+bfwd(breakpt))-y(1:breakpt);
+delsbck = (mbck(breakpt).*x(breakpt:end)+bbck(breakpt))-y(breakpt:end);
+%disp([sum(abs(delsfwd))/length(delsfwd), sum(abs(delsbck))/length(delsbck)])
+if (use_absolute_dev_p)
+    % error_curve(breakpt) = sum(abs(delsfwd))/sqrt(length(delsfwd)) + sum(abs(delsbck))/sqrt(length(delsbck));
+    error_curve = sum(abs(delsfwd))+ sum(abs(delsbck));
+else
+    error_curve = sqrt(sum(delsfwd.*delsfwd)) + sqrt(sum(delsbck.*delsbck));
 end
 end
