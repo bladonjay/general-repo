@@ -9,7 +9,7 @@ function [IsolationStats] = L_RatioTest(mywfs,otherwfs,df)
 %       if you have a dead channel, nan it out so you dont use the data but keep
 %       the place holders in
 %   otherwfs: same exact thing
-%   df: trodality of this tetrode (default is 4
+%   df: trodality of this tetrode (default is 4)
 %   
 % OUTPUTS:
 % Struct containing:
