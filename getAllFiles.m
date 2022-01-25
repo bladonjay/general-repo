@@ -7,7 +7,10 @@ function [fileList] = getAllFiles(dirName,extension)
   
   if exist('extension','var')
       if isnumeric(extension)
-          fileList=fileList(cellfun(@any,strfind(fileList,'.mat'))); %only take matlab files
+          if extension>0
+            fileList=fileList(cellfun(@any,strfind(fileList,'.mat'))); %only take matlab files
+          end
+
       else
           try
               fileList=fileList(cellfun(@any,strfind(fileList,extension)));
