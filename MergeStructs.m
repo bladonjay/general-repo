@@ -30,81 +30,87 @@ oldlength=length(oldstruct);
 
 newfields=fieldnames(newstruct);
 oldfields=fieldnames(oldstruct);
-allfields=unique([newfields; oldfields]);
-sharedfields=intersect(newfields,oldfields);
-oldonly=setdiff(oldfields,newfields);
-newonly=setdiff(newfields,oldfields);
-switch mergemethod
-    % in this case, all fields that exist in the first struct are put in the
-    % second struct, if they dont exist in the first struct, the second are
-    % kept
-    case 'update'
-        for i=1:length(allfields)
-           if exist(oldstruct,(allfields{i}))
-               if ~isempty(oldstruct.(allfields{i}))
-                   mergedstruct.(allfields{i})=oldstruct.allfields{i};
-               else
-                   mergedstruct.(allfields{i})=newstruct.allfields{i};
-               end
-           else
-               mergedstruct.(allfields{i})=newstruct.allfields{i};
-           end
-        end
-        % in this case, we build a 2 row struct, hwere only the shared
-        % features are kept
-    case 'addoverlap'
-        for i=1:length(sharedfields)
-            for j=1:length(oldstruct)
-                mergedstruct(j).(sharedfields{i})=oldstruct(j).(sharedfields{i});
-            end
-            for j=1:length(newstruct)
-                mergedstruct(end+1).(sharedfields{i})=newstruct.(sharedfields{i});  
-            end
-        end
-        % in this case this just adds a new struct on bottom but only uses
-        % the old fields
-    case 'addon'
-        for i=1:length(oldfields)
-            for j=1:length(oldstruct)
-                mergedstruct(j).(oldfields{i})=oldstruct(j).(oldfields{i});
-            end
-            for j=1:length(newstruct)
-                if isfield(newstruct,oldfields{i})
-                    mergedstruct(oldlength+j).(oldfields{i})=newstruct(j).(oldfields{i});
+if isempty(newfields)
+    mergedstruct=orderfields(oldstruct);
+elseif isempty(oldfields)
+    mergedstruct=orderfields(newstruct);
+else
+    allfields=unique([newfields; oldfields]);
+    sharedfields=intersect(newfields,oldfields);
+    oldonly=setdiff(oldfields,newfields);
+    newonly=setdiff(newfields,oldfields);
+    switch mergemethod
+        % in this case, all fields that exist in the first struct are put in the
+        % second struct, if they dont exist in the first struct, the second are
+        % kept
+        case 'update'
+            for i=1:length(allfields)
+                if isfield(oldstruct,(allfields{i}))
+                    if ~isempty(oldstruct.(allfields{i}))
+                        mergedstruct.(allfields{i})=oldstruct.(allfields{i});
+                    else
+                        mergedstruct.(allfields{i})=newstruct.(allfields{i});
+                    end
                 else
-                    mergedstruct(oldlength+j).(oldfields{i})=[];
+                    mergedstruct.(allfields{i})=newstruct.(allfields{i});
                 end
             end
-        end
-        % in this case we just add alln of new struct to old struct
-    case 'addall'
-        % first add all
-        for i=1:length(oldfields)
-            for j=1:length(oldstruct)
-                mergedstruct(j).(oldfields{i})=oldstruct.(oldfields{i});
-            end
-            for j=1:length(newstruct)
-                if isfield(newstruct,oldfields(i))
-                    mergedstruct(oldlength+j).(oldfields{i})=newstruct(j).(oldfields{i});
-                else
-                    mergedstruct(oldlength+j).(oldfields{i})=[];
+            % in this case, we build a 2 row struct, hwere only the shared
+            % features are kept
+        case 'addoverlap'
+            for i=1:length(sharedfields)
+                for j=1:length(oldstruct)
+                    mergedstruct(j).(sharedfields{i})=oldstruct(j).(sharedfields{i});
+                end
+                for j=1:length(newstruct)
+                    mergedstruct(end+1).(sharedfields{i})=newstruct.(sharedfields{i});
                 end
             end
-        end
-
-        for i=1:length(newonly)
-            for j=1:length(oldstruct)
-                mergedstruct(j).(newonly{i})=[];
+            % in this case this just adds a new struct on bottom but only uses
+            % the old fields
+        case 'addon'
+            for i=1:length(oldfields)
+                for j=1:length(oldstruct)
+                    mergedstruct(j).(oldfields{i})=oldstruct(j).(oldfields{i});
+                end
+                for j=1:length(newstruct)
+                    if isfield(newstruct,oldfields{i})
+                        mergedstruct(oldlength+j).(oldfields{i})=newstruct(j).(oldfields{i});
+                    else
+                        mergedstruct(oldlength+j).(oldfields{i})=[];
+                    end
+                end
             end
-            for j=1:length(newstruct)
-                mergedstruct(oldlength+j).(newonly{i})=newstruct(j).(newonly{i});
+            % in this case we just add alln of new struct to old struct
+        case 'addall'
+            % first add all
+            for i=1:length(oldfields)
+                for j=1:length(oldstruct)
+                    mergedstruct(j).(oldfields{i})=oldstruct(j).(oldfields{i});
+                end
+                for j=1:length(newstruct)
+                    if isfield(newstruct,oldfields(i))
+                        mergedstruct(oldlength+j).(oldfields{i})=newstruct(j).(oldfields{i});
+                    else
+                        mergedstruct(oldlength+j).(oldfields{i})=[];
+                    end
+                end
+                    
             end
-        end
-        
+            
+            for i=1:length(newonly)
+                for j=1:length(oldstruct)
+                    mergedstruct(j).(newonly{i})=[];
+                end
+                for j=1:length(newstruct)
+                    mergedstruct(oldlength+j).(newonly{i})=newstruct(j).(newonly{i});
+                end
+            end
+            
+    end
+    
+    mergedstruct=orderfields(mergedstruct);
 end
-
-mergedstruct=orderfields(mergedstruct);
-
 
 
 

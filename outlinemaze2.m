@@ -20,13 +20,14 @@ donehandle=guistructure.togglebutton2;
 %Set image as backdrop
 if exist('im','var')
     if ~isempty(im)
-        imshow(im,'Parent',imagehandle, 'XData',[1 1024],'YData',[768 1]);
+        %imshow(im,'Parent',imagehandle)% , 'XData',[1 1024],'YData',[768 1]);
+        imagesc(im,'Parent',imagehandle)
         hold(imagehandle,'on')
     end
 end
 %Plot tracking
 plot(imagehandle,xydata(:,1),xydata(:,2),'Color',[0.5 0.5 0.5]);
-axis(imagehandle,[0 max(xydata(:,1))*1.1 0 max(xydata(:,2))*1.1]);
+%axis(imagehandle,[0 max(xydata(:,1))*1.1 0 max(xydata(:,2))*1.1]);
 
 %Run GUI
 [xpos,ypos,tracks] = draw_maze_fcn(guihandle,fighandle,nexthandle,donehandle);
