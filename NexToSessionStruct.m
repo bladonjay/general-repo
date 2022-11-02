@@ -56,7 +56,7 @@ if any(dirName)
     % a fix just in case you split your tetrode files
     totcel=1;
     % set up an events file
-    rawevents= [];
+
     fprintf('Found the following NEX Files; \n');
     
     for i=1:length(fileList)
@@ -131,7 +131,7 @@ for i=1:length(fileList)
     end
     
     % Now go through and see if we have any events we want to grab
-    if isfield(datafile{i},'events');
+    if isfield(datafile{i},'events')
         fprintf('found %d events \n', length(datafile{i}.events));
         
         % tag onto any found events
@@ -155,45 +155,50 @@ if ~isfield(Session,'LFP')
         Session.LFP=[];
     end
 end
-
+        % unfortunately the tracking still blows
+        Session.coords=coords;
+        Session.unitdata=unitdata;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%% now process events into design matrices%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% now make our events
-[flags,pot_matrix,board_matrix,pot_legend,board_legend]=GetDelayEvents(rawevents);
 
-if ~isempty(flags)
+if exist('rawevents','var')
+    % now make our events
+    [flags,pot_matrix,board_matrix,pot_legend,board_legend]=GetDelayEvents(rawevents);
     
-    % now lets plot out where our samples occurred
-    names=fieldnames(coords);
-    %keepind=menu({names});
-    %for i=1:sum(keepind)
-    %end
-    tracking=coords.(names{1});
-    if ~isempty(tracking)
-        sampledata=board_matrix(:,[1 2 5]);
-        sampledata(:,3)=sampledata(:,3)+1;
-        plotsamples(tracking,sampledata);
-    end
-    
-    % unfortunately the tracking still blows
-    Session.coords=coords;
-    Session.unitdata=unitdata;
-    Session.flags=flags;
-    Session.pot_matrix=pot_matrix;
-    Session.board_matrix=board_matrix;
-    Session.Board_legend=board_legend;
-    Session.pot_legend=pot_legend;
-    
-    savedir=uigetdir(dirName,'choose a save folder');
-    if any(savedir)
-        dash=WhichDash;
-        save([savedir dash Session.name],'Session');
+    if ~isempty(flags)
+        
+        % now lets plot out where our samples occurred
+        names=fieldnames(coords);
+        %keepind=menu({names});
+        %for i=1:sum(keepind)
+        %end
+        tracking=coords.(names{1});
+        if ~isempty(tracking)
+            sampledata=board_matrix(:,[1 2 5]);
+            sampledata(:,3)=sampledata(:,3)+1;
+            plotsamples(tracking,sampledata);
+        end
+        
+
+        Session.flags=flags;
+        Session.pot_matrix=pot_matrix;
+        Session.board_matrix=board_matrix;
+        Session.Board_legend=board_legend;
+        Session.pot_legend=pot_legend;
     end
 end
+
+% save data out
+savedir=uigetdir(dirName,'choose a save folder');
+if any(savedir)
+    dash=WhichDash;
+    save([savedir dash Session.name],'Session');
+
 end
 
+end
 
 
 
