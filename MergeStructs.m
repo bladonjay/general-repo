@@ -40,18 +40,12 @@ else
     oldonly=setdiff(oldfields,newfields);
     newonly=setdiff(newfields,oldfields);
     switch mergemethod
-        % in this case, all fields that exist in the first struct are put in the
-        % second struct, if they dont exist in the first struct, the second are
-        % kept
+        % in this case, all fields that exist in the old struct are used,
+        % and all newstruct fields overwrite those that existed in old
         case 'update'
+            mergedstruct=orderfields(oldstruct);
             for i=1:length(allfields)
-                if isfield(oldstruct,(allfields{i}))
-                    if ~isempty(oldstruct.(allfields{i}))
-                        mergedstruct.(allfields{i})=oldstruct.(allfields{i});
-                    else
-                        mergedstruct.(allfields{i})=newstruct.(allfields{i});
-                    end
-                else
+                if isfield(newstruct,(allfields{i}))
                     mergedstruct.(allfields{i})=newstruct.(allfields{i});
                 end
             end
@@ -100,7 +94,7 @@ else
             
             for i=1:length(newonly)
                 for j=1:length(oldstruct)
-                    mergedstruct(j).(newonly{i})=[];
+                    mergedstruct(j).(newonly{i})=[]; % defaults to double, which is sometimes problematic
                 end
                 for j=1:length(newstruct)
                     mergedstruct(oldlength+j).(newonly{i})=newstruct(j).(newonly{i});
