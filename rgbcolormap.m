@@ -56,7 +56,9 @@ function rgbcolor = rgbcolormap(s)
     num(I) = num(I)/256;
     num(~I) = ((num(~I) - 240)/15 + 15)/16; + 240;
   end
-  if strcmpi(s,'chart')
+  if ~exist('s','var')
+     showcolors()
+  elseif strcmpi(s,'chart')
     showcolors()
   else
     k = find(strcmpi(s, name));
