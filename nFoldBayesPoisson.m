@@ -28,7 +28,7 @@ for k=1:nFold
     % is class
     classPriors=nan(1,size(SpkMat,2),length(ClassIDs));
     for j=1:length(ClassIDs)
-        classPriors(:,:,j)=mean(SpkMat(Classes==ClassIDs(j) & cv.training(k),:));
+        classPriors(:,:,j)=mean(SpkMat(Classes==ClassIDs(j) & cv.training(k),:)); % mean firing rate across trials
     end
     classPriors(classPriors==0)=realmin; % cast silent cells into really low rates to prevent error out
     testmat=SpkMat(cv.test(k),:); % the m trials x n units matrix
